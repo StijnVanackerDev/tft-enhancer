@@ -224,7 +224,9 @@ function playerLink(gameName: string | null, tagLine: string | null) {
                             champion's pool (1★ = 1, 2★ = 3, 3★ = 9), out of the
                             pool size. The bar is the share of the pool; the
                             grey mark is the usual level in this set, red means
-                            more contested than usual.
+                            clearly more contested than usual. Every champion
+                            taken at least as much as usual is here; the rest
+                            are under free champions.
                         </p>
                         <ul class="flex flex-col gap-1.5">
                             <li

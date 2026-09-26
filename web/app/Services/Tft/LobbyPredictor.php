@@ -325,16 +325,24 @@ class LobbyPredictor
     }
 
     /**
-     * Champions sorted by the share of their pool the opponents are expected to take.
+     * Champions the opponents take at least as much of as usual, sorted by
+     * the share of their pool expected to be taken.
      *
      * @param  list<array{id: string, name: string, cost: int, icon: ?string, poolSize: int, expectedCopies: float, usualCopies: float, players: list<array{name: string, copies: float}>}>  $rows
      * @return list<array{id: string, name: string, cost: int, icon: ?string, poolSize: int, expectedCopies: float, usualCopies: float, players: list<array{name: string, copies: float}>}>
      */
     private function contested(array $rows): array
     {
+        // Every champion taken at least as much as usual; the ones taken less
+        // are in the "free" list, so no champion falls between the two.
+        $rows = array_values(array_filter(
+            $rows,
+            fn (array $row) => $row['expectedCopies'] > 0 && $row['expectedCopies'] >= $row['usualCopies'],
+        ));
+
         usort($rows, fn (array $a, array $b) => $b['expectedCopies'] / $b['poolSize'] <=> $a['expectedCopies'] / $a['poolSize']);
 
-        return array_slice($rows, 0, 24);
+        return $rows;
     }
 
     /**
@@ -379,7 +387,7 @@ class LobbyPredictor
 
         usort($free, fn (array $a, array $b) => $a['ratio'] <=> $b['ratio']);
 
-        return array_slice($free, 0, 12);
+        return $free;
     }
 
     /**
