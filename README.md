@@ -26,7 +26,19 @@ No working Riot key? `php artisan db:seed --class=DemoSeeder` and open
 
 ## Web: comps, playstyle and lobby analysis
 
-- **Comps page** (`/comps`): comp stats from all stored boards of the
+- **Comp definitions** (names, units, traits, levelling) are imported from a
+  manually exported comps JSON file. After each patch:
+  1. Save the `comps_data` JSON response as
+     `web/storage/comps-import/comps_data1.json` (this folder is gitignored).
+  2. Run `php artisan tft:import-comps`. It replaces the definitions of that
+     set. For the live site, run it once against the production database
+     (`DB_CONNECTION=pgsql DB_URL=... php artisan tft:import-comps`).
+
+  Boards are matched to the definition whose units they contain most of (at
+  least half); everything else counts as a situational board. All statistics
+  (games, placement, top 4) are computed from our own match data. Without
+  definitions for a set, comps are derived from the boards themselves.
+- **Comps page** (`/comps`): the imported comps with our own stats for the
   current set. Import high-elo games with
   `php artisan tft:crawl-meta --players=10 --matches=10` (waits through rate
   limits, so it can take a while on a development key).
@@ -45,11 +57,10 @@ No working Riot key? `php artisan db:seed --class=DemoSeeder` and open
 
 ### How the prediction works
 
-A comp is identified by its carry: the 1-4 cost unit holding the most
-items (5-costs are capstones, not comps). Only "enterable" comps are shown
-as comps or suggested as open: at least 4 core units (in half of the
-boards), at least 1% of all boards and many different players. On the
-Set 18 data this puts 68% of boards into well-defined comps. Per
+Comps come from the imported definitions (see above); open comps must have
+at least 1% of the matched boards and an average placement of 4.4 or better.
+Without definitions a comp is identified by its carry: the 1-4 cost unit
+holding the most items (5-costs are capstones, not comps). Per
 player, P(champion on board) blends their recent boards (weight 0.85 per
 game back) with how common the champion is overall. The meta weight is
 `2 + 16 x (distinct carries / games)`, so players who force comps are

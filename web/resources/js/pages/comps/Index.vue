@@ -21,17 +21,14 @@ defineProps<{
                 Comps<template v-if="set"> · Set {{ set }}</template>
             </h1>
             <p class="mt-1 text-sm text-muted-foreground">
-                Based on {{ totalGames }} boards from high-elo games and
-                searched players' lobbies. A comp is named after its carry (the
-                1–4 cost unit holding the most items) and its most common trait.
-                Only lines you can reliably play towards are listed: a fixed
-                core of at least 4 units, played by many different players. They
-                cover
-                {{
+                Placement stats come from {{ totalGames }} boards from high-elo
+                games and searched players' lobbies that match one of these
+                comps ({{
                     totalGames
                         ? Math.round((coveredGames / totalGames) * 100)
                         : 0
-                }}% of all boards; the rest are situational boards.
+                }}% of all boards). Faded units are in the comp but played in
+                less than half of its boards.
             </p>
         </header>
 
@@ -70,17 +67,23 @@ defineProps<{
                                         )
                                     "
                                 />
-                                <span class="font-medium">{{
-                                    comp.label
-                                }}</span>
+                                <div>
+                                    <div class="font-medium">
+                                        {{ comp.label }}
+                                    </div>
+                                    <div
+                                        v-if="comp.levelling"
+                                        class="text-xs text-muted-foreground"
+                                    >
+                                        {{ comp.levelling }}
+                                    </div>
+                                </div>
                             </div>
                         </td>
                         <td class="py-2 pr-3">
                             <div class="flex flex-wrap gap-1">
                                 <img
-                                    v-for="unit in comp.units.filter(
-                                        (u) => u.share >= 0.5,
-                                    )"
+                                    v-for="unit in comp.units"
                                     :key="unit.id"
                                     :src="unit.icon ?? undefined"
                                     :alt="unit.name"
@@ -90,6 +93,7 @@ defineProps<{
                                         cn(
                                             'size-7 rounded border-2 object-cover',
                                             costBorderClass(unit.cost),
+                                            unit.share < 0.5 && 'opacity-40',
                                         )
                                     "
                                 />
@@ -99,10 +103,14 @@ defineProps<{
                             {{ comp.games }}
                         </td>
                         <td class="py-2 text-right tabular-nums">
-                            {{ comp.avgPlacement.toFixed(2) }}
+                            {{ comp.avgPlacement?.toFixed(2) ?? '–' }}
                         </td>
                         <td class="py-2 text-right tabular-nums">
-                            {{ comp.top4Rate }}%
+                            {{
+                                comp.top4Rate === null
+                                    ? '–'
+                                    : `${comp.top4Rate}%`
+                            }}
                         </td>
                     </tr>
                 </tbody>

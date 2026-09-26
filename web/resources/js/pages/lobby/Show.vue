@@ -265,7 +265,11 @@ function playerLink(gameName: string | null, tagLine: string | null) {
                                 <span
                                     class="text-xs text-muted-foreground tabular-nums"
                                 >
-                                    avg {{ comp.avgPlacement.toFixed(2) }} ·
+                                    <template v-if="comp.avgPlacement !== null"
+                                        >avg
+                                        {{ comp.avgPlacement.toFixed(2) }}
+                                        ·</template
+                                    >
                                     contest
                                     {{ comp.unitContest.toFixed(1) }} (usual
                                     {{ comp.usualContest.toFixed(1) }})

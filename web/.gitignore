@@ -42,3 +42,6 @@ yarn-error.log
 /boost.json
 /opencode.json
 /opencode.jsonc
+
+# Manually exported comp data: local only, never committed
+/storage/comps-import

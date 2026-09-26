@@ -97,7 +97,9 @@ class Playstyle
     {
         $rows = [];
 
-        foreach ($comps->sortByDesc(fn (Collection $g) => $g->count())->take(3) as $key => $group) {
+        $known = $comps->filter(fn (Collection $g, string|int $key) => $this->classifier->isComp((string) $key));
+
+        foreach ($known->sortByDesc(fn (Collection $g) => $g->count())->take(3) as $key => $group) {
             $trait = $group->pluck('trait')->filter()->countBy()->sortDesc()->keys()->first();
             $comp = $this->classifier->describe((string) $key, is_string($trait) ? $trait : null);
             $rows[] = [

@@ -13,14 +13,14 @@ class CompsController extends Controller
         $set = $meta->latestSet();
         $comps = $meta->forSet($set);
 
-        // Situational boards (e.g. a 5-cost with items on whatever fits) are
-        // counted in the totals but not listed as comps.
+        // Only real, repeatable lines are listed; situational boards count in
+        // the total but not as a comp.
         $enterable = array_values(array_filter($comps, fn (array $c) => $c['enterable']));
 
         return Inertia::render('comps/Index', [
             'set' => $set,
             'comps' => array_slice($enterable, 0, 40),
-            'totalGames' => array_sum(array_column($comps, 'games')),
+            'totalGames' => $meta->boardCount($set),
             'coveredGames' => array_sum(array_column($enterable, 'games')),
         ]);
     }

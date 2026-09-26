@@ -22,7 +22,7 @@ use Illuminate\Support\Collection;
  * docs in the README. A champion's contest is the expected number of
  * opponents that end up with it, compared with the usual level.
  *
- * @phpstan-type Meta array<string, array{key: string, label: string, icon: ?string, carryCost: int, games: int, share: float, avgPlacement: float, top4Rate: float, players: int, enterable: bool, units: list<array{id: string, name: string, cost: int, icon: ?string, share: float}>}>
+ * @phpstan-type Meta array<string, array{key: string, label: string, icon: ?string, carryCost: int, levelling: ?string, games: int, share: float, avgPlacement: ?float, top4Rate: ?float, players: int, enterable: bool, units: list<array{id: string, name: string, cost: int, icon: ?string, share: float}>}>
  */
 class LobbyPredictor
 {
@@ -34,8 +34,13 @@ class LobbyPredictor
 
     private const MIN_LISTED_PROBABILITY = 0.05;
 
-    /** Only comps that place at least this well on average are suggested. */
+    /** Only comps that place at least this well on average are suggested... */
     private const OPEN_COMP_MAX_AVG_PLACEMENT = 4.4;
+
+    /** ...and that make up at least this share of all matched boards (min 5 games). */
+    private const OPEN_COMP_MIN_SHARE = 0.01;
+
+    private const OPEN_COMP_MIN_GAMES = 5;
 
     public function __construct(
         private readonly CompClassifier $classifier,
@@ -193,14 +198,19 @@ class LobbyPredictor
         $played = $games->groupBy(fn (Participant $g) => $this->keyOf($g));
 
         $comps = [];
-        foreach (array_slice($distribution, 0, 4, true) as $key => $probability) {
-            if ($probability < self::MIN_LISTED_PROBABILITY) {
+        foreach ($distribution as $key => $probability) {
+            if ($probability < self::MIN_LISTED_PROBABILITY || count($comps) === 4) {
                 break;
             }
 
-            // Label with the trait this player uses with the carry, if they have played it.
+            if (! $this->classifier->isComp($key)) {
+                continue;
+            }
+
+            // Imported comps have a fixed name; carry-based ones are labelled
+            // with the trait this player uses with that carry.
             $own = $played->get($key);
-            $label = $own
+            $label = $own && ! isset($meta[$key])
                 ? $this->classifier->describe($key, $this->meta->mostCommonTrait($own))['label']
                 : ($meta[$key]['label'] ?? $this->classifier->describe($key)['label']);
 
@@ -275,10 +285,16 @@ class LobbyPredictor
     private function openComps(array $meta, array $expected, array $baseline, int $opponents): array
     {
         $rows = [];
+        $minGames = max(self::OPEN_COMP_MIN_GAMES, array_sum(array_column($meta, 'games')) * self::OPEN_COMP_MIN_SHARE);
 
         foreach ($meta as $key => $comp) {
-            // Only real, repeatable lines: no situational 5-cost boards.
-            if (! $comp['enterable'] || $comp['avgPlacement'] > self::OPEN_COMP_MAX_AVG_PLACEMENT) {
+            // Only suggest real, repeatable lines with a proven placement:
+            // enough games of our own, and placing well. Rarely played lines
+            // are too niche to rely on.
+            if (! $comp['enterable']
+                || $comp['games'] < $minGames
+                || $comp['avgPlacement'] === null
+                || $comp['avgPlacement'] > self::OPEN_COMP_MAX_AVG_PLACEMENT) {
                 continue;
             }
 

@@ -132,10 +132,12 @@ export type MetaComp = {
     label: string;
     icon: string | null;
     carryCost: number;
+    levelling: string | null;
     games: number;
     share: number;
-    avgPlacement: number;
-    top4Rate: number;
+    // Null until we have enough games of our own for this comp.
+    avgPlacement: number | null;
+    top4Rate: number | null;
     players: number;
     enterable: boolean;
     units: CompUnit[];
@@ -181,8 +183,8 @@ export type OpenComp = {
     label: string;
     icon: string | null;
     games: number;
-    avgPlacement: number;
-    top4Rate: number;
+    avgPlacement: number | null;
+    top4Rate: number | null;
     unitContest: number;
     usualContest: number;
     units: CompUnit[];

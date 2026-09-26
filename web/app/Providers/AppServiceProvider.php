@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Services\Riot\RateLimiter;
 use App\Services\Riot\RiotClient;
+use App\Services\Tft\CompClassifier;
 use App\Services\Tft\StaticData;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
@@ -30,6 +31,8 @@ class AppServiceProvider extends ServiceProvider
         ));
 
         $this->app->singleton(StaticData::class);
+        // Caches the imported comp definitions for the whole request/job.
+        $this->app->singleton(CompClassifier::class);
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Services\Tft;
 
+use App\Models\CompDefinition;
 use App\Models\Participant;
 use App\Models\TftMatch;
 use Illuminate\Support\Collection;
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\Cache;
  * played, how it places, and which units it usually runs. Built from our own
  * database (searched players' lobbies and `tft:crawl-meta`), aggregated over
  * all players, so no individual player's data is exposed.
+ *
+ * @phpstan-type Comp array{key: string, label: string, icon: ?string, carryCost: int, levelling: ?string, games: int, share: float, avgPlacement: ?float, top4Rate: ?float, players: int, enterable: bool, units: list<array{id: string, name: string, cost: int, icon: ?string, share: float}>}
  */
 class MetaComps
 {
@@ -46,7 +49,11 @@ class MetaComps
     }
 
     /**
-     * @return list<array{key: string, label: string, icon: ?string, carryCost: int, games: int, share: float, avgPlacement: float, top4Rate: float, players: int, enterable: bool, units: list<array{id: string, name: string, cost: int, icon: ?string, share: float}>}>
+     * All comps of a set with our own statistics. With imported definitions
+     * every definition is listed (even without games yet); otherwise comps
+     * are derived from the boards themselves.
+     *
+     * @return list<Comp>
      */
     public function forSet(?int $set): array
     {
@@ -59,35 +66,117 @@ class MetaComps
                 ->whereHas('match', fn ($q) => $q->againstPlayers()->where('set_number', $set))
                 ->get(['puuid', 'placement', 'traits', 'units']);
 
-            $groups = $boards->groupBy(fn (Participant $p) => $this->classifier->classify($p->traits, $p->units)['key']);
-            $total = max(1, $groups->filter(fn (Collection $g) => $g->count() >= self::MIN_GAMES)->sum(fn (Collection $g) => $g->count()));
-            $minGames = max(self::MIN_GAMES, $boards->count() * self::ENTERABLE_MIN_SHARE);
-            $minPlayers = max(3, $boards->count() * self::ENTERABLE_MIN_PLAYERS_SHARE);
+            $groups = $boards
+                ->toBase()
+                ->groupBy(fn (Participant $p) => $this->classifier->classify($p->traits, $p->units)['key'])
+                ->reject(fn (Collection $g, string $key) => ! $this->classifier->isComp($key));
 
-            return array_values($groups
-                ->filter(fn (Collection $g, string $key) => $g->count() >= self::MIN_GAMES && $key !== '-')
-                ->map(function (Collection $g, string $key) use ($total, $minGames, $minPlayers) {
-                    $units = $this->unitShares($g);
-                    $core = count(array_filter($units, fn (array $u) => $u['share'] >= self::CORE_UNIT_SHARE));
-                    $players = $g->pluck('puuid')->unique()->count();
+            $definitions = $this->classifier->definitions()->where('set_number', $set);
 
-                    return [
-                        'key' => $key,
-                        ...$this->classifier->describe($key, $this->mostCommonTrait($g)),
-                        'games' => $g->count(),
-                        'share' => round($g->count() / $total, 4),
-                        'avgPlacement' => round($g->avg('placement'), 2),
-                        'top4Rate' => round($g->where('placement', '<=', 4)->count() / $g->count() * 100, 1),
-                        'players' => $players,
-                        'enterable' => $core >= self::ENTERABLE_MIN_CORE_UNITS
-                            && $g->count() >= $minGames
-                            && $players >= $minPlayers,
-                        'units' => $units,
-                    ];
-                })
-                ->sortByDesc('games')
-                ->all());
+            $comps = $definitions->isNotEmpty()
+                ? $this->fromDefinitions($definitions, $groups)
+                : $this->fromBoards($groups, $boards->count());
+
+            usort($comps, fn (array $a, array $b) => [$b['games'], $a['label']] <=> [$a['games'], $b['label']]);
+
+            return $comps;
         });
+    }
+
+    /**
+     * @param  Collection<int, CompDefinition>  $definitions
+     * @param  Collection<array-key, Collection<int, Participant>>  $groups
+     * @return list<Comp>
+     */
+    private function fromDefinitions(Collection $definitions, Collection $groups): array
+    {
+        $total = max(1, $groups->sum(fn (Collection $g) => $g->count()));
+        $comps = [];
+
+        foreach ($definitions as $definition) {
+            $key = $definition->compKey();
+            /** @var Collection<int, Participant> $games */
+            $games = $groups->get($key, collect());
+            $enough = $games->count() >= self::MIN_GAMES;
+            $measured = collect($this->unitShares($games, 0))->keyBy('id');
+
+            // The definition's units are the comp; with enough games of our
+            // own we show how often each one is actually played.
+            $units = array_map(function (string $id) use ($measured, $games) {
+                $champion = $this->static->champion($id);
+
+                return [
+                    'id' => $id,
+                    'name' => $champion['name'],
+                    'cost' => $champion['cost'],
+                    'icon' => $champion['icon'],
+                    'share' => $games->count() >= 5 ? (float) ($measured->get($id)['share'] ?? 0) : 1.0,
+                ];
+            }, $definition->units);
+            usort($units, fn (array $a, array $b) => [$b['share'], $b['cost']] <=> [$a['share'], $a['cost']]);
+
+            $comps[] = [
+                'key' => $key,
+                ...$this->classifier->describe($key),
+                'games' => $games->count(),
+                'share' => round($games->count() / $total, 4),
+                'avgPlacement' => $enough ? round($games->avg('placement'), 2) : null,
+                'top4Rate' => $enough ? round($games->where('placement', '<=', 4)->count() / $games->count() * 100, 1) : null,
+                'players' => $games->pluck('puuid')->unique()->count(),
+                // Imported comps are known, repeatable lines.
+                'enterable' => true,
+                'units' => $units,
+            ];
+        }
+
+        return $comps;
+    }
+
+    /**
+     * Fallback without definitions: comps named after their carry.
+     *
+     * @param  Collection<array-key, Collection<int, Participant>>  $groups
+     * @return list<Comp>
+     */
+    private function fromBoards(Collection $groups, int $boards): array
+    {
+        $groups = $groups->filter(fn (Collection $g) => $g->count() >= self::MIN_GAMES);
+        $total = max(1, $groups->sum(fn (Collection $g) => $g->count()));
+        $minGames = max(self::MIN_GAMES, $boards * self::ENTERABLE_MIN_SHARE);
+        $minPlayers = max(3, $boards * self::ENTERABLE_MIN_PLAYERS_SHARE);
+        $comps = [];
+
+        foreach ($groups as $key => $g) {
+            $units = $this->unitShares($g);
+            $core = count(array_filter($units, fn (array $u) => $u['share'] >= self::CORE_UNIT_SHARE));
+            $players = $g->pluck('puuid')->unique()->count();
+
+            $comps[] = [
+                'key' => (string) $key,
+                ...$this->classifier->describe((string) $key, $this->mostCommonTrait($g)),
+                'games' => $g->count(),
+                'share' => round($g->count() / $total, 4),
+                'avgPlacement' => round($g->avg('placement'), 2),
+                'top4Rate' => round($g->where('placement', '<=', 4)->count() / $g->count() * 100, 1),
+                'players' => $players,
+                'enterable' => $core >= self::ENTERABLE_MIN_CORE_UNITS
+                    && $g->count() >= $minGames
+                    && $players >= $minPlayers,
+                'units' => $units,
+            ];
+        }
+
+        return $comps;
+    }
+
+    /**
+     * All stored boards of a set (games vs bots excluded).
+     */
+    public function boardCount(?int $set): int
+    {
+        return $set === null ? 0 : Participant::query()
+            ->whereHas('match', fn ($q) => $q->againstPlayers()->where('set_number', $set))
+            ->count();
     }
 
     /**
