@@ -81,6 +81,20 @@ defineProps<{
         </div>
 
         <div class="flex min-w-0 flex-1 flex-col gap-2">
+            <div class="flex items-baseline gap-2 text-sm">
+                <span v-if="game.comp" class="font-semibold">
+                    {{ game.comp.label }}
+                </span>
+                <span v-else class="text-muted-foreground">
+                    Situational board
+                </span>
+                <span
+                    v-if="game.comp?.levelling"
+                    class="text-xs text-muted-foreground"
+                >
+                    {{ game.comp.levelling }}
+                </span>
+            </div>
             <div class="flex flex-wrap gap-1">
                 <span
                     v-for="trait in game.traits"

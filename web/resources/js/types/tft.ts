@@ -58,6 +58,8 @@ export type Trait = {
 
 export type Game = {
     id: string;
+    // The known comp this board matches; null for situational boards.
+    comp: { label: string; levelling: string | null } | null;
     playedAt: string;
     duration: number;
     queue: string;

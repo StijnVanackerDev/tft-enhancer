@@ -81,7 +81,8 @@ class PlayerTest extends TestCase
                 ->where('units.0.id', 'TFT17_Jinx')
                 ->where('units.0.games', 2)
                 ->has('matches', 2)
-                ->where('matches.0.placement', 1));
+                ->where('matches.0.placement', 1)
+                ->has('matches.0.comp.label'));
 
         Bus::assertDispatchedAfterResponse(SyncPlayerMatches::class);
     }

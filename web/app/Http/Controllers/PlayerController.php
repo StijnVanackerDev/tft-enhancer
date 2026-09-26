@@ -9,6 +9,7 @@ use App\Models\Participant;
 use App\Models\Player;
 use App\Services\Riot\RiotApiException;
 use App\Services\Riot\RiotClient;
+use App\Services\Tft\CompClassifier;
 use App\Services\Tft\PlayerStats;
 use App\Services\Tft\Playstyle;
 use App\Services\Tft\StaticData;
@@ -28,6 +29,7 @@ class PlayerController extends Controller
         private readonly StaticData $static,
         private readonly PlayerStats $stats,
         private readonly Playstyle $playstyle,
+        private readonly CompClassifier $comps,
     ) {}
 
     /**
@@ -247,8 +249,16 @@ class PlayerController extends Controller
             ->sortByDesc(fn (array $u) => [$u['cost'], $u['stars']])
             ->values();
 
+        $comp = $this->comps->classify($p->traits, $p->units);
+        $described = $this->comps->describe($comp['key'], $comp['trait']);
+
         return [
             'id' => $p->match->match_id,
+            // Null for boards that don't match any known comp.
+            'comp' => $this->comps->isComp($comp['key']) ? [
+                'label' => $described['label'],
+                'levelling' => $described['levelling'],
+            ] : null,
             'playedAt' => $p->match->played_at->toIso8601String(),
             'duration' => $p->match->game_length,
             'queue' => $p->match->queueName(),
