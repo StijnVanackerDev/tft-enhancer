@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\Platform;
 use App\Jobs\SyncPlayerMatches;
+use App\Models\LobbyAnalysis;
 use App\Models\Participant;
 use App\Models\Player;
 use App\Services\Riot\RiotApiException;
@@ -83,6 +84,16 @@ class PlayerController extends Controller
         $latestSet = $realGames->max(fn (Participant $p) => $p->match->set_number);
         $setGames = $realGames->filter(fn (Participant $p) => $p->match->set_number === $latestSet);
 
+        // Existing (not failed) lobby analyses per match, newest wins.
+        $analyses = config('features.lobby_analysis')
+            ? LobbyAnalysis::query()
+                ->where('source', LobbyAnalysis::SOURCE_MATCH)
+                ->whereIn('source_id', $games->map(fn (Participant $p) => $p->match->match_id))
+                ->where('status', '!=', 'failed')
+                ->oldest()
+                ->pluck('id', 'source_id')
+            : collect();
+
         return Inertia::render('players/Show', [
             'player' => $this->presentPlayer($player),
             'summary' => $this->stats->summary($realGames),
@@ -90,7 +101,10 @@ class PlayerController extends Controller
             'units' => $this->stats->units($setGames),
             'traits' => $this->stats->traits($setGames),
             'playstyle' => $this->playstyle->profile($setGames->values(), $this->playstyle->levelByStage($latestSet)),
-            'matches' => $games->map(fn (Participant $p) => $this->presentGame($p))->values(),
+            'matches' => $games->map(fn (Participant $p) => [
+                ...$this->presentGame($p),
+                'lobbyAnalysisId' => $analyses[$p->match->match_id] ?? null,
+            ])->values(),
             'features' => ['lobbyAnalysis' => (bool) config('features.lobby_analysis')],
             // Checked after the page has loaded, so a slow or forbidden
             // spectator call never delays the page itself.

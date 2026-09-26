@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Form } from '@inertiajs/vue3';
+import { Form, Link } from '@inertiajs/vue3';
 import { Users } from '@lucide/vue';
 import UnitIcon from '@/components/tft/UnitIcon.vue';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,7 @@ import {
     timeAgo,
     traitStyleClass,
 } from '@/lib/tft';
-import { store as analyseLobby } from '@/routes/lobby';
+import { store as analyseLobby, show as showLobby } from '@/routes/lobby';
 import type { Game } from '@/types';
 
 defineProps<{
@@ -45,8 +45,20 @@ defineProps<{
                     {{ formatDuration(game.duration) }} · lvl {{ game.level }} ·
                     {{ roundToStage(game.lastRound) }}
                 </div>
+                <Button
+                    v-if="analysePlayerId && game.lobbyAnalysisId"
+                    as-child
+                    variant="outline"
+                    size="sm"
+                    class="mt-1 h-6 px-2 text-[11px]"
+                >
+                    <Link :href="showLobby(game.lobbyAnalysisId)">
+                        <Users class="size-3" />
+                        View lobby analysis
+                    </Link>
+                </Button>
                 <Form
-                    v-if="analysePlayerId"
+                    v-else-if="analysePlayerId"
                     v-bind="analyseLobby.form(analysePlayerId)"
                     v-slot="{ processing }"
                     class="mt-1"

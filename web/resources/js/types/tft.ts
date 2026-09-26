@@ -68,6 +68,8 @@ export type Game = {
     damage: number;
     traits: Trait[];
     units: Unit[];
+    // Set when this match's lobby has already been analysed.
+    lobbyAnalysisId?: string | null;
 };
 
 export type StatRow = {

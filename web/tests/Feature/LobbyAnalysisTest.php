@@ -75,6 +75,28 @@ class LobbyAnalysisTest extends TestCase
         $this->assertSame(1, LobbyAnalysis::count());
     }
 
+    public function test_an_analysed_match_links_to_its_analysis_instead_of_starting_a_new_one(): void
+    {
+        config(['features.lobby_analysis' => true]);
+        Queue::fake();
+        [$player, $match] = $this->lobbyMatch();
+        $player->update(['synced_at' => now()]);
+
+        $this->post(route('lobby.store', $player), ['source' => 'match', 'match_id' => $match->match_id]);
+        $analysis = LobbyAnalysis::sole();
+        $analysis->update(['status' => 'done']);
+
+        // Days later, the same match still reuses the finished analysis.
+        $this->travel(3)->days();
+        $this->post(route('lobby.store', $player), ['source' => 'match', 'match_id' => $match->match_id])
+            ->assertRedirect(route('lobby.show', $analysis));
+        $this->assertSame(1, LobbyAnalysis::count());
+
+        $player->update(['synced_at' => now()]);
+        $this->get(route('players.show', [$player->platform, $player->slug]))
+            ->assertInertia(fn (Assert $page) => $page->where('matches.0.lobbyAnalysisId', $analysis->id));
+    }
+
     public function test_the_job_loads_every_players_history_and_predicts_the_lobby(): void
     {
         config(['features.lobby_analysis' => true]);

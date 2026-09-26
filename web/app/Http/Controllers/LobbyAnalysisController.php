@@ -36,11 +36,16 @@ class LobbyAnalysisController extends Controller
             ? $this->fromMatch($player, (string) $validated['match_id'])
             : $this->fromLiveGame($player, $riot, $meta);
 
+        // A finished match never changes, so its analysis is reused forever;
+        // a live game only for an hour.
         $existing = LobbyAnalysis::query()
             ->where('source', $attributes['source'])
             ->where('source_id', $attributes['source_id'])
             ->where('status', '!=', 'failed')
-            ->where('created_at', '>', now()->subHour())
+            ->when(
+                $attributes['source'] === LobbyAnalysis::SOURCE_LIVE,
+                fn ($q) => $q->where('created_at', '>', now()->subHour()),
+            )
             ->latest()
             ->first();
 
