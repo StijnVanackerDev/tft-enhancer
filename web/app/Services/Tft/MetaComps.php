@@ -208,6 +208,41 @@ class MetaComps
     }
 
     /**
+     * Average pool copies of each unit on the boards that have it, e.g. 1.4
+     * for a unit usually played 1★, close to 9 for a reroll carry.
+     *
+     * @return array<string, float>
+     */
+    public function unitCopies(?int $set): array
+    {
+        if ($set === null) {
+            return [];
+        }
+
+        return Cache::remember("unit-copies:{$set}", now()->addMinutes(10), function () use ($set) {
+            $boards = Participant::query()
+                ->whereHas('match', fn ($q) => $q->againstPlayers()->where('set_number', $set))
+                ->get(['units']);
+
+            $copies = [];
+            $boardsWith = [];
+            foreach ($boards as $board) {
+                foreach ($board->copiesByUnit() as $id => $count) {
+                    $copies[$id] = ($copies[$id] ?? 0) + $count;
+                    $boardsWith[$id] = ($boardsWith[$id] ?? 0) + 1;
+                }
+            }
+
+            $average = [];
+            foreach ($copies as $id => $total) {
+                $average[$id] = $total / $boardsWith[$id];
+            }
+
+            return $average;
+        });
+    }
+
+    /**
      * The main trait most often played with a group of boards.
      *
      * @param  Collection<int, Participant>  $boards

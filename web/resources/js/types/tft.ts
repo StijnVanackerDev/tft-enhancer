@@ -173,9 +173,11 @@ export type ContestedChampion = {
     name: string;
     cost: number;
     icon: string | null;
-    expectedPlayers: number;
-    usualPlayers: number;
-    players: { name: string; weight: number }[];
+    poolSize: number;
+    // Copies expected to be taken by the opponents, and the usual level.
+    expectedCopies: number;
+    usualCopies: number;
+    players: { name: string; copies: number }[];
 };
 
 export type OpenComp = {
@@ -185,8 +187,9 @@ export type OpenComp = {
     games: number;
     avgPlacement: number | null;
     top4Rate: number | null;
-    unitContest: number;
-    usualContest: number;
+    // Average share of the core units' pools the opponents take (0..1).
+    poolTaken: number;
+    usualPoolTaken: number;
     units: CompUnit[];
 };
 

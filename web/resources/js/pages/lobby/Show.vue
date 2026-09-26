@@ -64,15 +64,10 @@ const opponents = computed(
     () => result.value?.players.filter((p) => !p.isSubject) ?? [],
 );
 
-const maxContest = computed(() =>
-    Math.max(
-        1,
-        ...(result.value?.contested.flatMap((c) => [
-            c.expectedPlayers,
-            c.usualPlayers,
-        ]) ?? []),
-    ),
-);
+// Share of a champion's pool, as a CSS width (capped at 100%).
+function poolWidth(copies: number, poolSize: number): string {
+    return `${Math.min(100, (copies / poolSize) * 100)}%`;
+}
 
 function playerLink(gameName: string | null, tagLine: string | null) {
     return gameName && tagLine
@@ -169,9 +164,11 @@ function playerLink(gameName: string | null, tagLine: string | null) {
                         Likely contested champions
                     </h2>
                     <p class="mb-3 text-xs text-muted-foreground">
-                        Expected number of opponents ending up with each
-                        champion. The grey mark is the usual level in this set;
-                        red means more contested than usual.
+                        Expected copies the opponents take out of each
+                        champion's pool (1★ = 1, 2★ = 3, 3★ = 9), out of the
+                        pool size. The bar is the share of the pool; the grey
+                        mark is the usual level in this set, red means more
+                        contested than usual.
                     </p>
                     <ul class="flex flex-col gap-1.5">
                         <li
@@ -179,9 +176,12 @@ function playerLink(gameName: string | null, tagLine: string | null) {
                             :key="champ.id"
                             class="flex items-center gap-2 text-sm"
                             :title="
-                                champ.players
-                                    .map((p) => `${p.name}: ${p.weight}`)
-                                    .join('\n')
+                                [
+                                    `Usually ${champ.usualCopies} of ${champ.poolSize} copies taken`,
+                                    ...champ.players.map(
+                                        (p) => `${p.name}: ${p.copies} copies`,
+                                    ),
+                                ].join('\n')
                             "
                         >
                             <img
@@ -204,29 +204,35 @@ function playerLink(gameName: string | null, tagLine: string | null) {
                                     :class="
                                         cn(
                                             'h-full rounded-full',
-                                            champ.expectedPlayers >
-                                                champ.usualPlayers * 1.15
+                                            champ.expectedCopies >
+                                                champ.usualCopies * 1.15
                                                 ? 'bg-destructive/70'
                                                 : 'bg-muted-foreground/50',
                                         )
                                     "
                                     :style="{
-                                        width: `${(champ.expectedPlayers / maxContest) * 100}%`,
+                                        width: poolWidth(
+                                            champ.expectedCopies,
+                                            champ.poolSize,
+                                        ),
                                     }"
                                 />
                                 <div
                                     class="absolute -top-0.5 h-3 w-0.5 bg-foreground/60"
                                     :style="{
-                                        left: `${(champ.usualPlayers / maxContest) * 100}%`,
+                                        left: poolWidth(
+                                            champ.usualCopies,
+                                            champ.poolSize,
+                                        ),
                                     }"
                                 />
                             </div>
                             <span
                                 class="w-20 text-right text-xs text-muted-foreground tabular-nums"
                             >
-                                {{ champ.expectedPlayers.toFixed(1) }}
+                                {{ champ.expectedCopies.toFixed(1) }}
                                 <span class="opacity-70"
-                                    >/ {{ champ.usualPlayers.toFixed(1) }}</span
+                                    >/ {{ champ.poolSize }}</span
                                 >
                             </span>
                         </li>
@@ -270,9 +276,12 @@ function playerLink(gameName: string | null, tagLine: string | null) {
                                         {{ comp.avgPlacement.toFixed(2) }}
                                         ·</template
                                     >
-                                    contest
-                                    {{ comp.unitContest.toFixed(1) }} (usual
-                                    {{ comp.usualContest.toFixed(1) }})
+                                    pool taken
+                                    {{ Math.round(comp.poolTaken * 100) }}%
+                                    (usual
+                                    {{
+                                        Math.round(comp.usualPoolTaken * 100)
+                                    }}%)
                                 </span>
                             </div>
                             <div class="mt-1 flex flex-wrap gap-1">

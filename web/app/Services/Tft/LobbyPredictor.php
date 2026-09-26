@@ -19,8 +19,14 @@ use Illuminate\Support\Collection;
  * someone who forces one comp is predicted from their own history, someone
  * who plays something new every game mostly from the meta. Backtested on
  * Challenger games this beat both "history only" and "meta only"; see
- * docs in the README. A champion's contest is the expected number of
- * opponents that end up with it, compared with the usual level.
+ * docs in the README.
+ *
+ * Contest is measured in pool copies: per opponent, P(unit on board) x the
+ * copies they usually hold when they have it (1★ = 1, 2★ = 3, 3★ = 9; their
+ * own history blended with the set average, so rerollers weigh heavily).
+ * Summed over the opponents and divided by the pool size of the unit's cost,
+ * that is the share of the pool expected to be taken, compared with the
+ * usual share in this set.
  *
  * @phpstan-type Meta array<string, array{key: string, label: string, icon: ?string, carryCost: int, levelling: ?string, games: int, share: float, avgPlacement: ?float, top4Rate: ?float, players: int, enterable: bool, units: list<array{id: string, name: string, cost: int, icon: ?string, share: float}>}>
  */
@@ -42,6 +48,9 @@ class LobbyPredictor
 
     private const OPEN_COMP_MIN_GAMES = 5;
 
+    /** Weight of the set average when estimating a player's copies of a unit. */
+    private const COPIES_PRIOR = 2.0;
+
     public function __construct(
         private readonly CompClassifier $classifier,
         private readonly Playstyle $playstyle,
@@ -58,6 +67,7 @@ class LobbyPredictor
         /** @var Meta $meta */
         $meta = array_column($this->meta->forSet($set), null, 'key');
         $baseline = $this->meta->unitBaseline($set);
+        $copies = $this->meta->unitCopies($set);
         $levelByStage = $this->playstyle->levelByStage($set);
 
         $players = [];
@@ -75,9 +85,12 @@ class LobbyPredictor
             if (! $isSubject) {
                 $opponents++;
 
+                $held = $this->copiesWhenHeld($games, $copies);
+
                 foreach ($this->unitProbabilities($games, $baseline, $alpha) as $unitId => $p) {
-                    $expected[$unitId] = ($expected[$unitId] ?? 0) + $p;
-                    $holders[$unitId][$name] = $p;
+                    $unitCopies = $p * ($held[$unitId] ?? $copies[$unitId] ?? 1.0);
+                    $expected[$unitId] = ($expected[$unitId] ?? 0) + $unitCopies;
+                    $holders[$unitId][$name] = $unitCopies;
                 }
             }
 
@@ -99,8 +112,8 @@ class LobbyPredictor
             'set' => $set,
             'metaGames' => array_sum(array_column($meta, 'games')),
             'players' => $players,
-            'contested' => $this->contested($expected, $holders, $baseline, $opponents),
-            'openComps' => $this->openComps($meta, $expected, $baseline, $opponents),
+            'contested' => $this->contested($expected, $holders, $this->usualCopies($baseline, $copies, $opponents)),
+            'openComps' => $this->openComps($meta, $expected, $this->usualCopies($baseline, $copies, $opponents)),
         ];
     }
 
@@ -154,6 +167,63 @@ class LobbyPredictor
         }
 
         return $probabilities;
+    }
+
+    /**
+     * Copies this player usually holds of each unit when it is on their board:
+     * their own recency-weighted average, pulled towards the set average.
+     *
+     * @param  Collection<int, Participant>  $games  Most recent first.
+     * @param  array<string, float>  $average  Set average copies when held.
+     * @return array<string, float>
+     */
+    public function copiesWhenHeld(Collection $games, array $average): array
+    {
+        $copies = [];
+        $weights = [];
+
+        foreach ($games->values() as $i => $game) {
+            $w = Playstyle::RECENCY_DECAY ** $i;
+            foreach ($game->copiesByUnit() as $unitId => $count) {
+                $copies[$unitId] = ($copies[$unitId] ?? 0) + $w * $count;
+                $weights[$unitId] = ($weights[$unitId] ?? 0) + $w;
+            }
+        }
+
+        $held = [];
+        foreach ($copies as $unitId => $weighted) {
+            $prior = $average[$unitId] ?? 1.0;
+            $held[$unitId] = ($weighted + self::COPIES_PRIOR * $prior) / ($weights[$unitId] + self::COPIES_PRIOR);
+        }
+
+        return $held;
+    }
+
+    /**
+     * Copies the opponents usually take of each unit in this set.
+     *
+     * @param  array<string, float>  $baseline  Share of boards with the unit.
+     * @param  array<string, float>  $copies  Average copies when held.
+     * @return array<string, float>
+     */
+    private function usualCopies(array $baseline, array $copies, int $opponents): array
+    {
+        $usual = [];
+        foreach ($baseline as $unitId => $share) {
+            $usual[$unitId] = $share * ($copies[$unitId] ?? 1.0) * $opponents;
+        }
+
+        return $usual;
+    }
+
+    /**
+     * Copies of a unit in the shared pool, or null for units outside the shop.
+     */
+    private function poolSize(int $cost): ?int
+    {
+        $size = config("tft.pool_sizes.{$cost}");
+
+        return is_numeric($size) ? (int) $size : null;
     }
 
     /**
@@ -238,20 +308,26 @@ class LobbyPredictor
     }
 
     /**
-     * Champions sorted by how many opponents are expected to end up with them.
+     * Champions sorted by the share of their pool the opponents are expected to take.
      *
-     * @param  array<string, float>  $expected
-     * @param  array<string, array<string, float>>  $holders
-     * @param  array<string, float>  $baseline
-     * @return list<array{id: string, name: string, cost: int, icon: ?string, expectedPlayers: float, usualPlayers: float, players: list<array{name: string, weight: float}>}>
+     * @param  array<string, float>  $expected  Expected copies taken.
+     * @param  array<string, array<string, float>>  $holders  Expected copies per opponent.
+     * @param  array<string, float>  $usual  Usual copies taken.
+     * @return list<array{id: string, name: string, cost: int, icon: ?string, poolSize: int, expectedCopies: float, usualCopies: float, players: list<array{name: string, copies: float}>}>
      */
-    private function contested(array $expected, array $holders, array $baseline, int $opponents): array
+    private function contested(array $expected, array $holders, array $usual): array
     {
-        arsort($expected);
-
         $rows = [];
-        foreach (array_slice($expected, 0, 24, true) as $id => $value) {
+
+        foreach ($expected as $id => $value) {
             $champion = $this->static->champion($id);
+            $pool = $this->poolSize($champion['cost']);
+
+            // Summons and other units outside the shop have no pool.
+            if ($pool === null) {
+                continue;
+            }
+
             $players = $holders[$id] ?? [];
             arsort($players);
             $top = array_slice($players, 0, 3, true);
@@ -261,28 +337,31 @@ class LobbyPredictor
                 'name' => $champion['name'],
                 'cost' => $champion['cost'],
                 'icon' => $champion['icon'],
-                'expectedPlayers' => round($value, 2),
-                'usualPlayers' => round(($baseline[$id] ?? 0) * $opponents, 2),
+                'poolSize' => $pool,
+                'expectedCopies' => round($value, 1),
+                'usualCopies' => round($usual[$id] ?? 0, 1),
                 'players' => array_map(
-                    fn (string $name, float $weight) => ['name' => $name, 'weight' => round($weight, 2)],
+                    fn (string $name, float $copies) => ['name' => $name, 'copies' => round($copies, 1)],
                     array_keys($top),
                     array_values($top),
                 ),
             ];
         }
 
-        return $rows;
+        usort($rows, fn (array $a, array $b) => $b['expectedCopies'] / $b['poolSize'] <=> $a['expectedCopies'] / $a['poolSize']);
+
+        return array_slice($rows, 0, 24);
     }
 
     /**
      * Well-placing comps whose core champions the opponents are least likely to take.
      *
      * @param  Meta  $meta
-     * @param  array<string, float>  $expected
-     * @param  array<string, float>  $baseline
+     * @param  array<string, float>  $expected  Expected copies taken.
+     * @param  array<string, float>  $usual  Usual copies taken.
      * @return list<array<string, mixed>>
      */
-    private function openComps(array $meta, array $expected, array $baseline, int $opponents): array
+    private function openComps(array $meta, array $expected, array $usual): array
     {
         $rows = [];
         $minGames = max(self::OPEN_COMP_MIN_GAMES, array_sum(array_column($meta, 'games')) * self::OPEN_COMP_MIN_SHARE);
@@ -298,13 +377,19 @@ class LobbyPredictor
                 continue;
             }
 
-            $core = array_values(array_filter($comp['units'], fn (array $u) => $u['share'] >= MetaComps::CORE_UNIT_SHARE));
+            $core = array_values(array_filter(
+                $comp['units'],
+                fn (array $u) => $u['share'] >= MetaComps::CORE_UNIT_SHARE && $this->poolSize($u['cost']) !== null,
+            ));
             if ($core === []) {
                 continue;
             }
 
-            $contest = array_sum(array_map(fn (array $u) => $expected[$u['id']] ?? 0, $core)) / count($core);
-            $usual = array_sum(array_map(fn (array $u) => ($baseline[$u['id']] ?? 0) * $opponents, $core)) / count($core);
+            // Average share of each core unit's pool that the opponents take.
+            $poolTaken = fn (array $copies) => array_sum(array_map(
+                fn (array $u) => ($copies[$u['id']] ?? 0) / (int) $this->poolSize($u['cost']),
+                $core,
+            )) / count($core);
 
             $rows[] = [
                 'key' => $key,
@@ -313,13 +398,13 @@ class LobbyPredictor
                 'games' => $comp['games'],
                 'avgPlacement' => $comp['avgPlacement'],
                 'top4Rate' => $comp['top4Rate'],
-                'unitContest' => round($contest, 2),
-                'usualContest' => round($usual, 2),
+                'poolTaken' => round($poolTaken($expected), 3),
+                'usualPoolTaken' => round($poolTaken($usual), 3),
                 'units' => array_slice($core, 0, 8),
             ];
         }
 
-        usort($rows, fn (array $a, array $b) => [$a['unitContest'], $a['avgPlacement']] <=> [$b['unitContest'], $b['avgPlacement']]);
+        usort($rows, fn (array $a, array $b) => [$a['poolTaken'], $a['avgPlacement']] <=> [$b['poolTaken'], $b['avgPlacement']]);
 
         return array_slice($rows, 0, 6);
     }

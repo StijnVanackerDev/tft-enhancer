@@ -135,6 +135,10 @@ class LobbyAnalysisTest extends TestCase
         $this->assertTrue($result['players'][0]['isSubject']);
         $this->assertSame('DIAMOND', $result['players'][1]['rank']['tier']);
         $this->assertNotEmpty($result['contested']);
+        // Leona (1-cost, 30 copies) is on every opponent's board at 2★.
+        $leona = collect($result['contested'])->firstWhere('id', 'TFT18_Leona');
+        $this->assertSame(30, $leona['poolSize']);
+        $this->assertGreaterThan(10, $leona['expectedCopies']);
 
         // Player 1 always played Cassiopeia and is the only other one forcing it.
         $second = $result['players'][1];
@@ -163,6 +167,30 @@ class LobbyAnalysisTest extends TestCase
 
         $this->assertGreaterThan(0.9, $forcerTop);
         $this->assertLessThan(0.4, $flexibleTop);
+    }
+
+    public function test_star_levels_count_as_pool_copies_and_rerollers_weigh_more(): void
+    {
+        $this->assertSame(1, Participant::copiesForStars(1));
+        $this->assertSame(3, Participant::copiesForStars(2));
+        $this->assertSame(9, Participant::copiesForStars(3));
+
+        $predictor = app(LobbyPredictor::class);
+        $reroller = collect(range(1, 5))->map(fn () => new Participant([
+            'placement' => 2, 'level' => 7, 'last_round' => 30, 'traits' => [],
+            'units' => [['character_id' => 'TFT18_Leona', 'tier' => 3, 'rarity' => 0, 'items' => []]],
+        ]));
+        $casual = collect(range(1, 5))->map(fn () => new Participant([
+            'placement' => 4, 'level' => 8, 'last_round' => 30, 'traits' => [],
+            'units' => [['character_id' => 'TFT18_Leona', 'tier' => 1, 'rarity' => 0, 'items' => []]],
+        ]));
+
+        // Set average: Leona is usually held at 2 copies.
+        $average = ['TFT18_Leona' => 2.0];
+
+        // 5 games at 3★ (9 copies), pulled a little towards the set average of 2.
+        $this->assertGreaterThan(6, $predictor->copiesWhenHeld($reroller, $average)['TFT18_Leona']);
+        $this->assertLessThan(1.5, $predictor->copiesWhenHeld($casual, $average)['TFT18_Leona']);
     }
 
     public function test_playstyle_tags_rerollers_and_one_tricks(): void

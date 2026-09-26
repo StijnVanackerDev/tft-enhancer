@@ -53,6 +53,31 @@ class Participant extends Model
     }
 
     /**
+     * Copies of a unit a star level takes out of the pool: 1★ = 1, 2★ = 3,
+     * 3★ = 9 (4★ units, where a set has them, are counted as 3★).
+     */
+    public static function copiesForStars(int $stars): int
+    {
+        return 3 ** (max(1, min(3, $stars)) - 1);
+    }
+
+    /**
+     * Pool copies held per unit on this final board (a unit fielded twice counts twice).
+     *
+     * @return array<string, int>
+     */
+    public function copiesByUnit(): array
+    {
+        $copies = [];
+
+        foreach ($this->units as $unit) {
+            $copies[$unit['character_id']] = ($copies[$unit['character_id']] ?? 0) + self::copiesForStars($unit['tier']);
+        }
+
+        return $copies;
+    }
+
+    /**
      * Traits that were actually active (Riot also lists inactive ones with style 0).
      *
      * @return list<array{name: string, num_units: int, style: int, tier_current: int, tier_total: int}>

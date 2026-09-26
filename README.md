@@ -66,6 +66,12 @@ game back) with how common the champion is overall. The meta weight is
 `2 + 16 x (distinct carries / games)`, so players who force comps are
 predicted from their own history and flexible players mostly from the meta.
 
+Contest is counted in pool copies (1★ = 1, 2★ = 3, 3★ = 9): per opponent,
+P(champion on board) x the copies they usually hold of it (their own history
+blended with the set average, so rerollers weigh heavily), summed and shown
+against the pool size per cost (`web/config/tft.php`: 30/25/18/10/9). The
+"usual" level is the same calculation with only the set averages.
+
 Backtested on 173 Challenger games (predicting each game from the player's
 earlier games only):
 
