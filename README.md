@@ -34,6 +34,10 @@ No working Riot key? `php artisan db:seed --class=DemoSeeder` and open
      set. For the live site, run it once against the production database
      (`DB_CONNECTION=pgsql DB_URL=... php artisan tft:import-comps`).
 
+  The export's period (its first trend day) becomes the meta window: only
+  games played since then count for comp stats, "usual" levels and roles,
+  once that window has 1000+ boards (until then all games of the set).
+
   Boards are matched to the definition whose units they contain most of (at
   least half); everything else counts as a situational board. All statistics
   (games, placement, top 4) are computed from our own match data. Without

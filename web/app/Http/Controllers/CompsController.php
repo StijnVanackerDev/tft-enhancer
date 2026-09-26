@@ -22,6 +22,7 @@ class CompsController extends Controller
             'comps' => array_slice($enterable, 0, 40),
             'totalGames' => $meta->boardCount($set),
             'tiers' => $meta->boardsPerTier($set),
+            'windowStart' => $set !== null ? $meta->windowStart($set)?->toDateString() : null,
             'coveredGames' => array_sum(array_column($enterable, 'games')),
         ]);
     }

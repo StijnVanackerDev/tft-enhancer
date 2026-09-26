@@ -64,7 +64,6 @@ class RankBracket
     {
         return match ($bracket) {
             'master+' => 'Master+',
-            'platinum-' => 'Platinum and below',
             default => ucfirst($bracket),
         };
     }

@@ -5,6 +5,7 @@ namespace App\Services\Tft;
 use App\Models\CompDefinition;
 use App\Models\Participant;
 use App\Models\TftMatch;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -277,9 +278,38 @@ class MetaComps
      */
     private function boards(int $set, ?string $bracket): Builder
     {
+        $from = $this->windowStart($set, $bracket);
+
+        return $this->boardsSince($set, $bracket, $from);
+    }
+
+    /**
+     * Start of the period that counts as the current meta: the period of the
+     * last comp data refresh, as long as it has enough boards (right after a
+     * refresh it may not yet); null means all games of the set.
+     */
+    public function windowStart(int $set, ?string $bracket = null): ?CarbonImmutable
+    {
+        $from = CompDefinition::validFrom($set);
+
+        if ($from === null) {
+            return null;
+        }
+
+        $boards = $this->boardsSince($set, $bracket, $from)->count();
+
+        return $boards >= (int) config('tft.window_min_boards') ? $from : null;
+    }
+
+    /**
+     * @return Builder<Participant>
+     */
+    private function boardsSince(int $set, ?string $bracket, ?CarbonImmutable $from): Builder
+    {
         return Participant::query()->whereHas('match', fn ($q) => $q
             ->againstPlayers()
             ->where('set_number', $set)
+            ->when($from !== null, fn ($q) => $q->where('played_at', '>=', $from))
             ->when($bracket !== null, fn ($q) => $q->whereIn('sample_tier', RankBracket::tiers((string) $bracket))));
     }
 

@@ -10,7 +10,7 @@ class RankBracketTest extends TestCase
 {
     public function test_a_lobby_belongs_to_the_bracket_of_its_median_ranked_player(): void
     {
-        $lobby = ['EMERALD', 'EMERALD', 'DIAMOND', 'PLATINUM', 'EMERALD', null, 'MASTER', 'EMERALD'];
+        $lobby = ['EMERALD', 'EMERALD', 'DIAMOND', 'DIAMOND', 'EMERALD', null, 'MASTER', 'EMERALD'];
 
         $this->assertSame('emerald', RankBracket::forLobby($lobby));
         $this->assertSame('master+', RankBracket::forLobby(['CHALLENGER', 'GRANDMASTER', 'DIAMOND']));
@@ -19,7 +19,8 @@ class RankBracketTest extends TestCase
 
     public function test_brackets_map_tiers_and_have_labels(): void
     {
-        $this->assertSame('platinum-', RankBracket::forTier('gold'));
+        // Lower ranks aren't tracked as a bracket.
+        $this->assertNull(RankBracket::forTier('gold'));
         $this->assertSame(['DIAMOND'], RankBracket::tiers('diamond'));
         $this->assertSame('Master+', RankBracket::label('master+'));
         $this->assertSame('Emerald', RankBracket::label('emerald'));

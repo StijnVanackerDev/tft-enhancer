@@ -18,6 +18,8 @@ defineProps<{
     coveredGames: number;
     // Boards per rank their match was found through.
     tiers: Record<string, number>;
+    // Start of the period that counts as the current meta (last comp data refresh).
+    windowStart: string | null;
 }>();
 
 function tierName(tier: string): string {
@@ -47,6 +49,16 @@ function tierName(tier: string): string {
                 v-if="Object.keys(tiers).length"
                 class="mt-1 text-xs text-muted-foreground"
             >
+                <template v-if="windowStart">
+                    Games since
+                    {{
+                        new Date(windowStart).toLocaleDateString('en-GB', {
+                            day: 'numeric',
+                            month: 'short',
+                        })
+                    }}
+                    (last comp data refresh).
+                </template>
                 Boards by rank:
                 <template v-for="(boards, tier, i) in tiers" :key="tier">
                     <template v-if="i > 0"> · </template>

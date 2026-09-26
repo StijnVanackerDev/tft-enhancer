@@ -76,7 +76,11 @@ class CrawlMeta extends Command
         $this->info(sprintf('%s: %d matches found, %d new.', ucfirst($tier), count($matchIds), count($missing)));
 
         $bar = $this->output->createProgressBar(count($missing));
-        $importer->importMissing($riot, $platform, $missing, fn () => $bar->advance());
+        // Tag each match right away, so an interrupted crawl keeps its tiers.
+        $importer->importMissing($riot, $platform, $missing, function (string $matchId) use ($bar, $importer, $tier) {
+            $importer->tagTier([$matchId], $tier);
+            $bar->advance();
+        });
         $bar->finish();
         $this->newLine();
 

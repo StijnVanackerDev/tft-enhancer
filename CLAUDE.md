@@ -31,9 +31,10 @@ Tests fake the Riot API (`Http::fake`) and sleeps (`Sleep::fake()`); follow that
   1. The user saves the exported `comps_data` JSON as `web/storage/comps-import/comps_data1.json` (folder is gitignored, never commit it).
   2. `php artisan tft:import-comps` (replaces that set's definitions).
   3. For production, run once against Neon: `DB_CONNECTION=pgsql DB_URL="<neon url>" php artisan tft:import-comps` (ask the user for the URL; don't store it in files).
+  The import also sets the meta window (`comp_definitions.valid_from` = the export's first trend day); only games since then count as the current meta once there are 1000+ boards.
   Only names/units/traits/levelling are imported; all stats come from our own Riot data. Never call the source site's internal API directly: that was blocked by the safety check; the manual export is the agreed workflow.
 - **Champion names/icons**: `php artisan tft:import-static` (Community Dragon). The Docker build runs it automatically.
-- **Ranked matches for comp stats**: `php artisan tft:crawl-meta --tier=challenger --tier=diamond --tier=emerald --players=20 --matches=8` (sleeps through rate limits). Crawl several tiers so the meta isn't Challenger-only; matches are tagged with `sample_tier`, and the comps page shows boards per tier.
+- **Ranked matches for comp stats**: `php artisan tft:crawl-meta --tier=challenger --tier=grandmaster --tier=master --tier=diamond --tier=emerald --players=20 --matches=8` (the user plays around Emerald: don't crawl Platinum or lower) (sleeps through rate limits). Crawl several tiers so the meta isn't Challenger-only; matches are tagged with `sample_tier`, and the comps page shows boards per tier.
 - **Riot dev key** expires every 24h. It lives in `web/.env` as `RIOT_API_KEY` and in Render's env settings; update both. Test a key with account-v1 or tft-league-v1, not the status endpoints (those return 401 for dev keys even when valid).
 
 ## Rules and decisions

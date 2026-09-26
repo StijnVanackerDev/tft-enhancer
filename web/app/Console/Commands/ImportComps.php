@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\CompDefinition;
 use App\Services\Tft\MetaComps;
 use App\Services\Tft\StaticData;
+use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -45,6 +46,9 @@ class ImportComps extends Command
             $this->warn('Champion data is missing; run `php artisan tft:import-static` first for proper names.');
         }
 
+        // The export describes a period (its daily trends); games from its
+        // first day on are the current meta. Without trends: from now.
+        $validFrom = $this->periodStart($clusters) ?? now();
         $definitions = [];
 
         foreach ($clusters as $id => $cluster) {
@@ -76,6 +80,7 @@ class ImportComps extends Command
                     return ['name' => $m[1] ?? $trait, 'tier' => (int) ($m[2] ?? 1)];
                 }, $this->list($cluster['traits_string'] ?? '')),
                 'levelling' => is_string($cluster['levelling'] ?? null) ? $cluster['levelling'] : null,
+                'valid_from' => $validFrom,
             ];
         }
 
@@ -90,9 +95,35 @@ class ImportComps extends Command
         // Comp stats and baselines are cached per set.
         MetaComps::forgetCache($set);
 
-        $this->info(sprintf('Imported %d comps for Set %d.', count($definitions), $set));
+        $this->info(sprintf(
+            'Imported %d comps for Set %d. Meta stats now use games since %s.',
+            count($definitions),
+            $set,
+            $validFrom->format('Y-m-d'),
+        ));
 
         return self::SUCCESS;
+    }
+
+    /**
+     * First day covered by the export's daily trends, if it has any.
+     *
+     * @param  array<mixed>  $clusters
+     */
+    private function periodStart(array $clusters): ?CarbonImmutable
+    {
+        $first = null;
+
+        foreach ($clusters as $cluster) {
+            foreach ((is_array($cluster) ? $cluster['trends'] ?? [] : []) as $trend) {
+                $day = is_array($trend) && is_string($trend['day'] ?? null) ? substr($trend['day'], 0, 10) : null;
+                if ($day !== null && ($first === null || $day < $first)) {
+                    $first = $day;
+                }
+            }
+        }
+
+        return $first === null ? null : CarbonImmutable::parse($first)->startOfDay();
     }
 
     /**

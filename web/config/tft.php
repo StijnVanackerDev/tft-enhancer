@@ -82,10 +82,24 @@ return [
         'master+' => ['CHALLENGER', 'GRANDMASTER', 'MASTER'],
         'diamond' => ['DIAMOND'],
         'emerald' => ['EMERALD'],
-        'platinum-' => ['PLATINUM', 'GOLD', 'SILVER', 'BRONZE', 'IRON'],
+        // Lower ranks aren't tracked; such lobbies are compared with all games.
     ],
 
     'bracket_min_boards' => 1000,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Meta window
+    |--------------------------------------------------------------------------
+    |
+    | Only games played since the start of the imported comp data's period
+    | (comp_definitions.valid_from) count as the current meta, once there are
+    | at least this many boards in that window; until then all games of the
+    | set are used.
+    |
+    */
+
+    'window_min_boards' => 1000,
 
     /*
     |--------------------------------------------------------------------------

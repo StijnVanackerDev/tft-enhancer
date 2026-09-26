@@ -33,6 +33,7 @@ class CompDefinitionsTest extends TestCase
                     'traits_string' => 'T_Blossom_2, T_Invoker_1',
                     'name' => [['name' => 'T_Invoker', 'type' => 'trait'], ['name' => 'U_A', 'type' => 'unit']],
                     'levelling' => 'Fast 8',
+                    'trends' => [['day' => '2026-09-21T00:00:00.000Z'], ['day' => '2026-09-20T00:00:00.000Z']],
                 ],
                 '2' => [
                     'Cluster' => 2,
@@ -147,6 +148,39 @@ class CompDefinitionsTest extends TestCase
         $this->assertSame(3, $units['U_B']['needed']);
         $this->assertSame('filler', $units['U_C']['role']);
         $this->assertSame(0, $units['U_D']['needed']);
+    }
+
+    public function test_the_meta_window_starts_at_the_imported_comp_datas_period(): void
+    {
+        $this->artisan('tft:import-comps', ['file' => $this->file]);
+
+        $this->assertSame('2026-09-20', CompDefinition::validFrom(18)?->toDateString());
+
+        // One game from before the period, two from within it.
+        foreach (['2026-09-10' => 'OLD', '2026-09-21' => 'NEW1', '2026-09-22' => 'NEW2'] as $day => $id) {
+            $match = TftMatch::create([
+                'match_id' => "EUW1_{$id}", 'platform' => Platform::EUW, 'played_at' => $day,
+                'game_length' => 2000, 'game_version' => 'Version 16.19', 'set_number' => 18,
+            ]);
+            $match->participants()->create([
+                'puuid' => "p-{$id}", 'placement' => 2, 'level' => 8, 'gold_left' => 0, 'last_round' => 30,
+                'traits' => [], 'units' => $this->units(['U_A', 'U_B', 'U_C', 'U_D']),
+            ]);
+        }
+
+        $meta = app(MetaComps::class);
+
+        // Too few boards in the window: all games of the set are used.
+        config(['tft.window_min_boards' => 1000]);
+        $this->assertNull($meta->windowStart(18));
+        $this->assertSame(3, $meta->boardCount(18));
+
+        // Enough boards: only games since the period start count.
+        config(['tft.window_min_boards' => 2]);
+        MetaComps::forgetCache(18);
+        $this->assertSame('2026-09-20', $meta->windowStart(18)?->toDateString());
+        $this->assertSame(2, $meta->boardCount(18));
+        $this->assertSame(2, collect($meta->forSet(18))->max('games'));
     }
 
     public function test_roll_level_follows_the_comps_levelling(): void

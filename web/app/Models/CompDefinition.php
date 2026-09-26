@@ -19,10 +19,11 @@ use Illuminate\Database\Eloquent\Model;
  * @property list<string> $carries
  * @property list<array{name: string, tier: int}> $traits
  * @property string|null $levelling
+ * @property CarbonImmutable|null $valid_from Start of the period the imported comp data describes.
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  */
-#[Fillable(['set_number', 'external_id', 'name', 'units', 'carries', 'traits', 'levelling'])]
+#[Fillable(['set_number', 'external_id', 'name', 'units', 'carries', 'traits', 'levelling', 'valid_from'])]
 class CompDefinition extends Model
 {
     /** Prefix that marks a comp key as an imported definition. */
@@ -37,7 +38,19 @@ class CompDefinition extends Model
             'units' => 'array',
             'carries' => 'array',
             'traits' => 'array',
+            'valid_from' => 'datetime',
         ];
+    }
+
+    /**
+     * Start of the current comp data's period for a set: only matches played
+     * since then count as the current meta. Null when nothing is imported.
+     */
+    public static function validFrom(int $set): ?CarbonImmutable
+    {
+        $from = static::where('set_number', $set)->min('valid_from');
+
+        return $from === null ? null : CarbonImmutable::parse($from);
     }
 
     /**
