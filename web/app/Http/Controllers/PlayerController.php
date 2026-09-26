@@ -77,13 +77,15 @@ class PlayerController extends Controller
             ->limit(config('services.riot.match_count'))
             ->get();
 
-        // Unit/trait stats only make sense within one set.
-        $latestSet = $games->max(fn (Participant $p) => $p->match->set_number);
-        $setGames = $games->filter(fn (Participant $p) => $p->match->set_number === $latestSet);
+        // Games vs bots are listed but never counted. Unit/trait stats only
+        // make sense within one set.
+        $realGames = $games->reject(fn (Participant $p) => $p->match->isAgainstBots());
+        $latestSet = $realGames->max(fn (Participant $p) => $p->match->set_number);
+        $setGames = $realGames->filter(fn (Participant $p) => $p->match->set_number === $latestSet);
 
         return Inertia::render('players/Show', [
             'player' => $this->presentPlayer($player),
-            'summary' => $this->stats->summary($games),
+            'summary' => $this->stats->summary($realGames),
             'set' => $latestSet,
             'units' => $this->stats->units($setGames),
             'traits' => $this->stats->traits($setGames),

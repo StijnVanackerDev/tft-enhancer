@@ -6,8 +6,10 @@ use App\Enums\Platform;
 use App\Models\TftMatch;
 use App\Services\Riot\RiotClient;
 use Closure;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Stores Riot match data (the match plus all 8 participants).
@@ -27,8 +29,13 @@ class MatchImporter
         foreach ($this->missing($matchIds) as $matchId) {
             $data = $riot->match($platform, $matchId);
 
-            if ($data !== null && $this->import($platform, $data) !== null) {
-                $imported++;
+            try {
+                if ($data !== null && $this->import($platform, $data) !== null) {
+                    $imported++;
+                }
+            } catch (QueryException $e) {
+                // One malformed match shouldn't stop a whole sync or analysis.
+                Log::warning("Skipped match {$matchId}: {$e->getMessage()}");
             }
 
             if ($afterEach !== null) {
@@ -61,7 +68,12 @@ class MatchImporter
             return null;
         }
 
-        return DB::transaction(function () use ($platform, $data, $info) {
+        // Practice games: every bot has the puuid "BOT". Only the humans are
+        // stored, and the match is marked so it stays out of all statistics.
+        $humans = array_values(array_filter($info['participants'], fn (array $p) => $p['puuid'] !== TftMatch::BOT_PUUID));
+        $hasBots = count($humans) < count($info['participants']);
+
+        return DB::transaction(function () use ($platform, $data, $info, $humans, $hasBots) {
             $match = TftMatch::create([
                 'match_id' => $data['metadata']['match_id'],
                 'platform' => $platform,
@@ -70,10 +82,10 @@ class MatchImporter
                 'game_version' => $info['game_version'] ?? '',
                 'queue_id' => $info['queue_id'] ?? $info['queueId'] ?? null,
                 'set_number' => $info['tft_set_number'] ?? null,
-                'game_type' => $info['tft_game_type'] ?? null,
+                'game_type' => $hasBots ? TftMatch::GAME_TYPE_BOTS : ($info['tft_game_type'] ?? null),
             ]);
 
-            foreach ($info['participants'] as $p) {
+            foreach ($humans as $p) {
                 $match->participants()->create([
                     'puuid' => $p['puuid'],
                     'game_name' => $p['riotIdGameName'] ?? null,

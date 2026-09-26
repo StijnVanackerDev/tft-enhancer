@@ -127,7 +127,7 @@ class Playstyle
             $levels = self::DEFAULT_LEVEL_BY_STAGE;
 
             Participant::query()
-                ->whereHas('match', fn ($q) => $q->where('set_number', $set))
+                ->whereHas('match', fn ($q) => $q->againstPlayers()->where('set_number', $set))
                 ->get(['level', 'last_round'])
                 ->groupBy(fn (Participant $p) => self::stageOf($p->last_round))
                 ->each(function (Collection $group, int $stage) use (&$levels) {

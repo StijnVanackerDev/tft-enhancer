@@ -125,6 +125,7 @@ class AnalyzeLobby implements ShouldQueue
         return Participant::query()
             ->where('puuid', $puuid)
             ->whereHas('match', fn ($q) => $q
+                ->againstPlayers()
                 ->whereIn('match_id', $matchIds)
                 // Never let the analysed match itself leak into the history.
                 ->where('match_id', '!=', $this->analysis->source_id)

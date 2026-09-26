@@ -44,7 +44,7 @@ class MetaComps
 
         return Cache::remember("meta-comps:{$set}", now()->addMinutes(10), function () use ($set) {
             $boards = Participant::query()
-                ->whereHas('match', fn ($q) => $q->where('set_number', $set))
+                ->whereHas('match', fn ($q) => $q->againstPlayers()->where('set_number', $set))
                 ->get(['placement', 'traits', 'units']);
 
             $groups = $boards->groupBy(fn (Participant $p) => $this->classifier->classify($p->traits, $p->units)['key']);
@@ -80,7 +80,7 @@ class MetaComps
 
         return Cache::remember("unit-baseline:{$set}", now()->addMinutes(10), function () use ($set) {
             $boards = Participant::query()
-                ->whereHas('match', fn ($q) => $q->where('set_number', $set))
+                ->whereHas('match', fn ($q) => $q->againstPlayers()->where('set_number', $set))
                 ->get(['units']);
 
             $counts = [];

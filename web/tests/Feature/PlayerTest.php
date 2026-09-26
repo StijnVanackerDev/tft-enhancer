@@ -128,6 +128,35 @@ class PlayerTest extends TestCase
         Http::assertNotSent(fn ($request) => str_ends_with($request->url(), '/matches/EUW1_1'));
     }
 
+    public function test_practice_games_against_bots_are_stored_without_the_bots_and_not_counted(): void
+    {
+        $player = Player::factory()->create(['puuid' => 'me', 'game_name' => 'Me', 'tag_line' => 'EUW']);
+        $payload = $this->matchPayload('EUW1_BOTS', 'me');
+        // Riot gives every bot the same puuid.
+        $bot = $payload['info']['participants'][1];
+        $payload['info']['participants'][1] = [...$bot, 'puuid' => 'BOT'];
+        $payload['info']['participants'][2] = [...$bot, 'puuid' => 'BOT', 'placement' => 7];
+
+        Http::fake([
+            '*/tft/league/v1/*' => Http::response([]),
+            '*/ids*' => Http::response(['EUW1_BOTS']),
+            '*/matches/EUW1_BOTS' => Http::response($payload),
+        ]);
+
+        $player->claimSync();
+        app()->call([new SyncPlayerMatches($player), 'handle']);
+
+        $this->assertNull($player->fresh()->sync_error);
+        $this->assertDatabaseHas('tft_matches', ['match_id' => 'EUW1_BOTS', 'game_type' => 'bots']);
+        $this->assertDatabaseCount('participants', 1);
+
+        Bus::fake();
+        $this->get(route('players.show', ['euw1', 'Me-EUW']))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('summary.games', 0)
+                ->where('matches.0.queue', 'vs. Bots'));
+    }
+
     public function test_failed_sync_is_released_and_error_is_stored(): void
     {
         $player = Player::factory()->create();

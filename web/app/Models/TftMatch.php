@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Enums\Platform;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -24,6 +26,31 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable(['match_id', 'platform', 'played_at', 'game_length', 'game_version', 'queue_id', 'set_number', 'game_type'])]
 class TftMatch extends Model
 {
+    /** Riot gives every bot in a practice game this puuid. */
+    public const BOT_PUUID = 'BOT';
+
+    /** Our own game_type for matches that had bots in them. */
+    public const GAME_TYPE_BOTS = 'bots';
+
+    /**
+     * Matches against real players only (practice games vs bots say nothing
+     * about how someone plays).
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function againstPlayers(Builder $query): void
+    {
+        $query->where(fn (Builder $q) => $q
+            ->whereNull('game_type')
+            ->orWhere('game_type', '!=', self::GAME_TYPE_BOTS));
+    }
+
+    public function isAgainstBots(): bool
+    {
+        return $this->game_type === self::GAME_TYPE_BOTS;
+    }
+
     /**
      * @return array<string, string>
      */
@@ -57,6 +84,7 @@ class TftMatch extends Model
     public function queueName(): string
     {
         return match (true) {
+            $this->isAgainstBots() => 'vs. Bots',
             $this->game_type === 'pairs' => 'Double Up',
             $this->game_type === 'turbo' => 'Hyper Roll',
             $this->queue_id === 1100 => 'Ranked',
