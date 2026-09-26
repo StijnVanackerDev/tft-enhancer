@@ -21,6 +21,7 @@ class CompsController extends Controller
             'set' => $set,
             'comps' => array_slice($enterable, 0, 40),
             'totalGames' => $meta->boardCount($set),
+            'tiers' => $meta->boardsPerTier($set),
             'coveredGames' => array_sum(array_column($enterable, 'games')),
         ]);
     }

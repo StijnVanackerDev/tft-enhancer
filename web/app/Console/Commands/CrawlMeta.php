@@ -10,25 +10,35 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 
 /**
- * Fills the database with recent high-elo matches, which the comps page and
- * lobby predictions use as "the meta". Sleeps through rate limits, so it can
- * run for a while with a development key.
+ * Fills the database with recent ranked matches, which the comps page and
+ * lobby predictions use as "the meta". Crawl several tiers so the data isn't
+ * only Challenger. Sleeps through rate limits, so it can run for a while with
+ * a development key.
+ *
+ *   php artisan tft:crawl-meta --tier=challenger --tier=diamond --tier=emerald --players=20
  */
 class CrawlMeta extends Command
 {
+    private const APEX_TIERS = ['challenger', 'grandmaster', 'master'];
+
+    private const DIVISION_TIERS = ['diamond', 'emerald', 'platinum', 'gold', 'silver', 'bronze', 'iron'];
+
     protected $signature = 'tft:crawl-meta
         {--platform=euw1 : Server to crawl}
-        {--players=10 : Number of top Challenger players}
+        {--tier=* : Tiers to crawl (challenger, grandmaster, master, diamond, emerald, ...); default challenger}
+        {--players=10 : Players per tier}
         {--matches=10 : Recent matches per player}';
 
-    protected $description = 'Import recent Challenger matches for comp statistics';
+    protected $description = 'Import recent ranked matches of one or more tiers for comp statistics';
 
     public function handle(RiotClient $riot, MatchImporter $importer): int
     {
         $platform = Platform::tryFrom((string) $this->option('platform'));
+        $tiers = array_map(fn ($tier) => strtolower((string) $tier), (array) $this->option('tier')) ?: ['challenger'];
+        $unknown = array_diff($tiers, [...self::APEX_TIERS, ...self::DIVISION_TIERS]);
 
-        if ($platform === null) {
-            $this->error('Unknown platform.');
+        if ($platform === null || $unknown !== []) {
+            $this->error($platform === null ? 'Unknown platform.' : 'Unknown tier: '.implode(', ', $unknown));
 
             return self::FAILURE;
         }
@@ -37,31 +47,78 @@ class CrawlMeta extends Command
             fn (float $seconds) => $this->components->warn(sprintf('Rate limit reached, waiting %d seconds...', ceil($seconds))),
         );
 
-        $entries = collect($riot->challengerLeague($platform)['entries'] ?? [])
-            ->sortByDesc('leaguePoints')
-            ->take((int) $this->option('players'));
+        foreach ($tiers as $tier) {
+            $this->crawlTier($riot, $importer, $platform, $tier);
+        }
 
-        $this->info("Collecting match ids of {$entries->count()} players...");
+        // Comp stats and baselines are cached per set; make them pick up the new games.
+        $set = TftMatch::max('set_number');
+        foreach (['meta-comps', 'unit-baseline', 'unit-copies', 'level-by-stage'] as $cache) {
+            Cache::forget("{$cache}:{$set}");
+        }
+
+        $this->info('Done.');
+
+        return self::SUCCESS;
+    }
+
+    private function crawlTier(RiotClient $riot, MatchImporter $importer, Platform $platform, string $tier): void
+    {
+        $players = (int) $this->option('players');
+        $puuids = $this->players($riot, $platform, $tier, $players);
+
+        $this->info(sprintf('%s: collecting match ids of %d players...', ucfirst($tier), count($puuids)));
 
         $matchIds = [];
-        foreach ($entries as $entry) {
-            array_push($matchIds, ...$riot->matchIds($platform, (string) $entry['puuid'], (int) $this->option('matches')));
+        foreach ($puuids as $puuid) {
+            array_push($matchIds, ...$riot->matchIds($platform, $puuid, (int) $this->option('matches')));
         }
         $matchIds = array_values(array_unique($matchIds));
 
         $missing = $importer->missing($matchIds);
-        $this->info(sprintf('%d matches found, %d new.', count($matchIds), count($missing)));
+        $this->info(sprintf('%s: %d matches found, %d new.', ucfirst($tier), count($matchIds), count($missing)));
 
         $bar = $this->output->createProgressBar(count($missing));
         $importer->importMissing($riot, $platform, $missing, fn () => $bar->advance());
         $bar->finish();
         $this->newLine();
 
-        // Comp stats are cached; make them pick up the new games.
-        Cache::forget('meta-comps:'.TftMatch::max('set_number'));
+        $importer->tagTier($matchIds, $tier);
+    }
 
-        $this->info('Done.');
+    /**
+     * Players to sample: the top of an apex tier, or a random spread over
+     * the four divisions of a lower tier.
+     *
+     * @return list<string>
+     */
+    private function players(RiotClient $riot, Platform $platform, string $tier, int $count): array
+    {
+        if (in_array($tier, self::APEX_TIERS, true)) {
+            return array_values(collect($riot->apexLeague($platform, $tier)['entries'] ?? [])
+                ->sortByDesc('leaguePoints')
+                ->take($count)
+                ->pluck('puuid')
+                ->filter()
+                ->map(fn ($p) => (string) $p)
+                ->all());
+        }
 
-        return self::SUCCESS;
+        $perDivision = (int) ceil($count / 4);
+        $puuids = [];
+
+        foreach (['I', 'II', 'III', 'IV'] as $division) {
+            $entries = collect($riot->tierEntries($platform, $tier, $division))
+                // Skip players who stopped playing: their matches are old.
+                ->reject(fn (array $e) => $e['inactive'] ?? false)
+                ->pluck('puuid')
+                ->filter()
+                ->shuffle()
+                ->take($perDivision);
+
+            array_push($puuids, ...$entries->map(fn ($p) => (string) $p)->all());
+        }
+
+        return array_slice($puuids, 0, $count);
     }
 }

@@ -82,6 +82,10 @@ class AnalyzeLobby implements ShouldQueue
             $analysis->advance(sprintf('Loaded match %d of %d', $loaded, count($missing)));
         });
 
+        foreach ($histories as $puuid => $matchIds) {
+            $importer->tagTier($matchIds, MatchImporter::rankedTier($leagues[$puuid]));
+        }
+
         $analysis->message = 'Predicting comps';
         $analysis->save();
 

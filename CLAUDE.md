@@ -33,7 +33,7 @@ Tests fake the Riot API (`Http::fake`) and sleeps (`Sleep::fake()`); follow that
   3. For production, run once against Neon: `DB_CONNECTION=pgsql DB_URL="<neon url>" php artisan tft:import-comps` (ask the user for the URL; don't store it in files).
   Only names/units/traits/levelling are imported; all stats come from our own Riot data. Never call the source site's internal API directly: that was blocked by the safety check; the manual export is the agreed workflow.
 - **Champion names/icons**: `php artisan tft:import-static` (Community Dragon). The Docker build runs it automatically.
-- **High-elo matches for comp stats**: `php artisan tft:crawl-meta --players=10 --matches=10` (sleeps through rate limits).
+- **Ranked matches for comp stats**: `php artisan tft:crawl-meta --tier=challenger --tier=diamond --tier=emerald --players=20 --matches=8` (sleeps through rate limits). Crawl several tiers so the meta isn't Challenger-only; matches are tagged with `sample_tier`, and the comps page shows boards per tier.
 - **Riot dev key** expires every 24h. It lives in `web/.env` as `RIOT_API_KEY` and in Render's env settings; update both. Test a key with account-v1 or tft-league-v1, not the status endpoints (those return 401 for dev keys even when valid).
 
 ## Rules and decisions

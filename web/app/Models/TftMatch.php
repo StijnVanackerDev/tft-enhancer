@@ -20,10 +20,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int|null $queue_id
  * @property int|null $set_number
  * @property string|null $game_type
+ * @property string|null $sample_tier Rank of the player through whom we found this match.
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  */
-#[Fillable(['match_id', 'platform', 'played_at', 'game_length', 'game_version', 'queue_id', 'set_number', 'game_type'])]
+#[Fillable(['match_id', 'platform', 'played_at', 'game_length', 'game_version', 'queue_id', 'set_number', 'game_type', 'sample_tier'])]
 class TftMatch extends Model
 {
     /** Riot gives every bot in a practice game this puuid. */

@@ -73,12 +73,30 @@ class RiotClient
     }
 
     /**
+     * All players of an apex tier: "challenger", "grandmaster" or "master".
+     *
      * @return array{entries: list<array<string, mixed>>}|null
      */
-    public function challengerLeague(Platform $platform): ?array
+    public function apexLeague(Platform $platform, string $tier): ?array
     {
         /** @var array{entries: list<array<string, mixed>>}|null */
-        return $this->get($platform->value, 'challenger', '/tft/league/v1/challenger');
+        return $this->get($platform->value, $tier, '/tft/league/v1/'.rawurlencode($tier));
+    }
+
+    /**
+     * One page of ranked players in a tier and division, e.g. DIAMOND / II.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function tierEntries(Platform $platform, string $tier, string $division, int $page = 1): array
+    {
+        /** @var list<array<string, mixed>> */
+        return $this->get(
+            $platform->value,
+            'league-entries',
+            '/tft/league/v1/entries/'.rawurlencode(strtoupper($tier)).'/'.rawurlencode($division),
+            ['queue' => 'RANKED_TFT', 'page' => $page],
+        ) ?? [];
     }
 
     /**

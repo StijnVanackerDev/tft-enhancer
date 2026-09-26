@@ -40,7 +40,7 @@ No working Riot key? `php artisan db:seed --class=DemoSeeder` and open
   definitions for a set, comps are derived from the boards themselves.
 - **Comps page** (`/comps`): the imported comps with our own stats for the
   current set. Import high-elo games with
-  `php artisan tft:crawl-meta --players=10 --matches=10` (waits through rate
+  `php artisan tft:crawl-meta --tier=challenger --tier=diamond --tier=emerald --players=20 --matches=8` (waits through rate
   limits, so it can take a while on a development key).
 - **Playstyle** on each player page: leveling speed (level vs. the usual
   level of players knocked out in the same stage), reroll vs. 4/5-cost

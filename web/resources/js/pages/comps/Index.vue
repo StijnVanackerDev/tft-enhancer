@@ -16,7 +16,13 @@ defineProps<{
     comps: MetaComp[];
     totalGames: number;
     coveredGames: number;
+    // Boards per rank their match was found through.
+    tiers: Record<string, number>;
 }>();
+
+function tierName(tier: string): string {
+    return tier.charAt(0) + tier.slice(1).toLowerCase();
+}
 </script>
 
 <template>
@@ -36,6 +42,16 @@ defineProps<{
                         : 0
                 }}% of all boards). ★ marks 3★ targets; faded units are fillers
                 played for their traits. Hover a unit for details.
+            </p>
+            <p
+                v-if="Object.keys(tiers).length"
+                class="mt-1 text-xs text-muted-foreground"
+            >
+                Boards by rank:
+                <template v-for="(boards, tier, i) in tiers" :key="tier">
+                    <template v-if="i > 0"> · </template>
+                    {{ tierName(String(tier)) }} {{ boards }}
+                </template>
             </p>
         </header>
 

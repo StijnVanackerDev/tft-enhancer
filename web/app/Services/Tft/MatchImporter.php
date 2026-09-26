@@ -47,6 +47,39 @@ class MatchImporter
     }
 
     /**
+     * Remember through which rank these matches were found (keeps an existing tier).
+     *
+     * @param  list<string>  $matchIds
+     */
+    public function tagTier(array $matchIds, ?string $tier): void
+    {
+        if ($tier === null || $matchIds === []) {
+            return;
+        }
+
+        TftMatch::query()
+            ->whereIn('match_id', $matchIds)
+            ->whereNull('sample_tier')
+            ->update(['sample_tier' => strtoupper($tier)]);
+    }
+
+    /**
+     * The RANKED_TFT tier in a list of league entries, e.g. "DIAMOND".
+     *
+     * @param  list<array<string, mixed>>  $league
+     */
+    public static function rankedTier(array $league): ?string
+    {
+        foreach ($league as $entry) {
+            if (($entry['queueType'] ?? null) === 'RANKED_TFT' && is_string($entry['tier'] ?? null)) {
+                return $entry['tier'];
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @param  list<string>  $matchIds
      * @return list<string>
      */

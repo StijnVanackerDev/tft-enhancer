@@ -232,6 +232,38 @@ class MetaComps
     }
 
     /**
+     * Boards per rank we found their match through, highest rank first.
+     *
+     * @return array<string, int>
+     */
+    public function boardsPerTier(?int $set): array
+    {
+        if ($set === null) {
+            return [];
+        }
+
+        $order = ['CHALLENGER', 'GRANDMASTER', 'MASTER', 'DIAMOND', 'EMERALD', 'PLATINUM', 'GOLD', 'SILVER', 'BRONZE', 'IRON'];
+
+        $counts = Participant::query()
+            ->join('tft_matches', 'tft_matches.id', '=', 'participants.tft_match_id')
+            ->where('tft_matches.set_number', $set)
+            ->where(fn ($q) => $q->whereNull('tft_matches.game_type')->orWhere('tft_matches.game_type', '!=', TftMatch::GAME_TYPE_BOTS))
+            ->selectRaw('tft_matches.sample_tier as tier, count(*) as boards')
+            ->groupBy('tft_matches.sample_tier')
+            ->pluck('boards', 'tier')
+            ->all();
+
+        $sorted = [];
+        foreach ([...$order, ''] as $tier) {
+            if (isset($counts[$tier]) && (int) $counts[$tier] > 0) {
+                $sorted[$tier === '' ? 'UNKNOWN' : $tier] = (int) $counts[$tier];
+            }
+        }
+
+        return $sorted;
+    }
+
+    /**
      * All stored boards of a set (games vs bots excluded).
      */
     public function boardCount(?int $set): int

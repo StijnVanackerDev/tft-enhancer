@@ -32,6 +32,7 @@ class SyncPlayerMatches
 
             $matchIds = $riot->matchIds($player->platform, $player->puuid, config('services.riot.match_count'));
             $importer->importMissing($riot, $player->platform, $matchIds);
+            $importer->tagTier($matchIds, MatchImporter::rankedTier($player->league));
 
             $player->synced_at = now();
             $player->sync_error = null;
