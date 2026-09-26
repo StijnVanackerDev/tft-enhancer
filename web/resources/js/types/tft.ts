@@ -249,7 +249,7 @@ export type LobbyResult = {
 
 export type LobbyAnalysis = {
     id: string;
-    source: 'match' | 'live' | 'manual';
+    source: 'match' | 'live' | 'manual' | 'client';
     sourceId: string;
     status: 'queued' | 'running' | 'waiting' | 'done' | 'failed';
     progressDone: number;

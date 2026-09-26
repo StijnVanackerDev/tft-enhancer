@@ -6,6 +6,7 @@ use App\Jobs\AnalyzeLobby;
 use App\Models\LobbyAnalysis;
 use App\Models\Player;
 use App\Models\TftMatch;
+use App\Services\Riot\LeagueClient;
 use App\Services\Riot\RiotApiException;
 use App\Services\Riot\RiotClient;
 use App\Services\Tft\MetaComps;
@@ -28,7 +29,7 @@ class LobbyAnalysisController extends Controller
         abort_unless(config('features.lobby_analysis'), 404);
 
         $validated = $request->validate([
-            'source' => ['required', Rule::in([LobbyAnalysis::SOURCE_MATCH, LobbyAnalysis::SOURCE_LIVE, LobbyAnalysis::SOURCE_MANUAL])],
+            'source' => ['required', Rule::in([LobbyAnalysis::SOURCE_MATCH, LobbyAnalysis::SOURCE_LIVE, LobbyAnalysis::SOURCE_MANUAL, LobbyAnalysis::SOURCE_CLIENT])],
             'match_id' => ['required_if:source,match', 'nullable', 'string'],
             'names' => ['required_if:source,manual', 'nullable', 'string', 'max:1000'],
         ]);
@@ -36,6 +37,7 @@ class LobbyAnalysisController extends Controller
         $attributes = match ($validated['source']) {
             LobbyAnalysis::SOURCE_MATCH => $this->fromMatch($player, (string) $validated['match_id']),
             LobbyAnalysis::SOURCE_MANUAL => $this->fromNames($player, (string) $validated['names'], $meta),
+            LobbyAnalysis::SOURCE_CLIENT => $this->fromClient($player, $meta),
             default => $this->fromLiveGame($player, $riot, $meta),
         };
 
@@ -108,6 +110,42 @@ class LobbyAnalysisController extends Controller
                 ->map(fn ($p) => ['puuid' => $p->puuid, 'gameName' => $p->game_name, 'tagLine' => $p->tag_line])
                 ->values()
                 ->all(),
+        ];
+    }
+
+    /**
+     * The game in progress, read from the Riot client on this PC. The page's
+     * player must be the one logged in to that client.
+     *
+     * @return array<string, mixed>
+     */
+    private function fromClient(Player $player, MetaComps $meta): array
+    {
+        try {
+            $game = app(LeagueClient::class)->currentGame();
+        } catch (\RuntimeException $e) {
+            throw ValidationException::withMessages(['source' => $e->getMessage()]);
+        }
+
+        if (! collect($game['players'])->contains('puuid', $player->puuid)) {
+            $me = trim(($game['self']['gameName'] ?? '').'#'.($game['self']['tagLine'] ?? ''), '#');
+
+            throw ValidationException::withMessages([
+                'source' => "{$player->riot_id} isn't in the game running on this PC".($me !== '' ? " (logged in: {$me}). Open your own player page." : '.'),
+            ]);
+        }
+
+        $others = array_values(array_filter($game['players'], fn (array $p) => $p['puuid'] !== $player->puuid));
+
+        return [
+            'source' => LobbyAnalysis::SOURCE_CLIENT,
+            'source_id' => $game['gameId'],
+            'history_before' => null,
+            'set_number' => $meta->latestSet(),
+            'participants' => [
+                ['puuid' => $player->puuid, 'gameName' => $player->game_name, 'tagLine' => $player->tag_line],
+                ...$others,
+            ],
         ];
     }
 

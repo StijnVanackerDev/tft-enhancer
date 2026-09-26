@@ -45,6 +45,9 @@ class LobbyAnalysis extends Model
     /** Riot IDs entered by hand, for when live game lookups aren't available. */
     public const SOURCE_MANUAL = 'manual';
 
+    /** The game in progress, read from the Riot client on this PC. */
+    public const SOURCE_CLIENT = 'client';
+
     /** Opponents that can be entered for a manual lobby. */
     public const MAX_MANUAL_OPPONENTS = 7;
 

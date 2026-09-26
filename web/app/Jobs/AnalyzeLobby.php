@@ -121,7 +121,8 @@ class AnalyzeLobby implements ShouldQueue
      */
     private function resolveRiotIds(RiotClient $riot, LobbyAnalysis $analysis): array
     {
-        $unresolved = array_filter($analysis->participants, fn (array $m) => $m['puuid'] === null);
+        // Riot IDs without puuid (typed by hand), or puuids without a name (from the client).
+        $unresolved = array_filter($analysis->participants, fn (array $m) => $m['puuid'] === null || $m['gameName'] === null);
 
         if ($unresolved !== []) {
             $analysis->update([
@@ -136,8 +137,20 @@ class AnalyzeLobby implements ShouldQueue
         $notFound = [];
 
         foreach ($analysis->participants as $member) {
-            if ($member['puuid'] !== null) {
+            if ($member['puuid'] !== null && $member['gameName'] !== null) {
                 $players[$member['puuid']] = $member;
+
+                continue;
+            }
+
+            if ($member['puuid'] !== null) {
+                $account = $riot->accountByPuuid($analysis->platform, $member['puuid']);
+                $analysis->advance('Looked up a player name');
+                $players[$member['puuid']] = [
+                    'puuid' => $member['puuid'],
+                    'gameName' => $account['gameName'] ?? null,
+                    'tagLine' => $account['tagLine'] ?? null,
+                ];
 
                 continue;
             }

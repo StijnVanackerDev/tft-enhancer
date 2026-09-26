@@ -38,6 +38,18 @@ return [
         'rate_limits' => env('RIOT_RATE_LIMITS', '20:1,100:120'),
     ],
 
+    // The Riot client on this PC (local API, see App\Services\Riot\LeagueClient).
+    // Its lockfile holds the port and password while it runs; the League
+    // client and the standalone TFT client each write their own.
+    'league_client' => [
+        'lockfiles' => array_values(array_filter([
+            env('LEAGUE_CLIENT_LOCKFILE'),
+            'C:\\Riot Games\\League of Legends\\lockfile',
+            'C:\\Riot Games\\Teamfight Tactics\\Live\\lockfile',
+            'C:\\Riot Games\\Teamfight Tactics\\lockfile',
+        ])),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

@@ -121,6 +121,10 @@ function playerLink(gameName: string | null, tagLine: string | null) {
                     {{ analysis.sourceId }}, compared with what they actually
                     played.
                 </template>
+                <template v-else-if="analysis.source === 'client'">
+                    Game in progress, read from your Riot client. Based on each
+                    player's recent games.
+                </template>
                 <template v-else-if="analysis.source === 'manual'">
                     Lobby entered by hand. Based on each player's recent games.
                 </template>

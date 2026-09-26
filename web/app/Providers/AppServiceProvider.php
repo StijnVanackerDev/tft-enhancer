@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\Riot\LeagueClient;
 use App\Services\Riot\RateLimiter;
 use App\Services\Riot\RiotClient;
 use App\Services\Tft\CompClassifier;
@@ -28,6 +29,10 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(RiotClient::class, fn (): RiotClient => new RiotClient(
             config('services.riot.key'),
             $this->app->make(RateLimiter::class),
+        ));
+
+        $this->app->singleton(LeagueClient::class, fn (): LeagueClient => new LeagueClient(
+            config('services.league_client.lockfiles', []),
         ));
 
         $this->app->singleton(StaticData::class);

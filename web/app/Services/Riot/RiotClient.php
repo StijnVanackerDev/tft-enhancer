@@ -62,6 +62,15 @@ class RiotClient
     }
 
     /**
+     * @return array{puuid: string, gameName: string, tagLine: string}|null
+     */
+    public function accountByPuuid(Platform $platform, string $puuid): ?array
+    {
+        /** @var array{puuid: string, gameName: string, tagLine: string}|null */
+        return $this->get($platform->region(), 'account', '/riot/account/v1/accounts/by-puuid/'.rawurlencode($puuid));
+    }
+
+    /**
      * Ranked entries (RANKED_TFT, double up, ...) for a player.
      *
      * @return list<array<string, mixed>>
