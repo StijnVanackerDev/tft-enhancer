@@ -1,0 +1,41 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# Deploys the Laravel site in web/ as a free Docker web service.
+# Values marked "sync: false" are asked for when you create the Blueprint.
+services:
+  - type: web
+    name: tft-enhancer
+    runtime: docker
+    plan: free
+    dockerfilePath: ./web/Dockerfile
+    dockerContext: ./web
+    healthCheckPath: /up
+    buildFilter:
+      paths:
+        - web/**
+    envVars:
+      - key: APP_NAME
+        value: TFT Enhancer
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_KEY
+        sync: false
+      - key: APP_URL
+        sync: false
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_URL
+        sync: false
+      - key: DB_SSLMODE
+        value: require
+      - key: RIOT_API_KEY
+        sync: false
+      - key: QUEUE_CONNECTION
+        value: sync
+      - key: SESSION_DRIVER
+        value: database
+      - key: CACHE_STORE
+        value: database
+      - key: PORT
+        value: "8080"
