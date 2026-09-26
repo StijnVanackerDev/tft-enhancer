@@ -27,7 +27,7 @@ defineProps<{
     <article
         class="flex flex-col gap-3 rounded-xl border border-sidebar-border/70 p-3 sm:flex-row sm:items-center dark:border-sidebar-border"
     >
-        <div class="flex shrink-0 items-center gap-3 sm:w-36">
+        <div class="flex shrink-0 items-center gap-3 sm:w-40">
             <div
                 :class="
                     cn(
@@ -54,7 +54,7 @@ defineProps<{
                 >
                     <Link :href="showLobby(game.lobbyAnalysisId)">
                         <Users class="size-3" />
-                        View lobby analysis
+                        View analysis
                     </Link>
                 </Button>
                 <Form
