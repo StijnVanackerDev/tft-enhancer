@@ -6,6 +6,8 @@ services:
     name: tft-enhancer
     runtime: docker
     plan: free
+    # Same area as the Neon database (AWS Frankfurt) to keep queries fast.
+    region: frankfurt
     dockerfilePath: ./web/Dockerfile
     dockerContext: ./web
     healthCheckPath: /up
