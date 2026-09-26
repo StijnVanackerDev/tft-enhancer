@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { Head, Link, usePoll } from '@inertiajs/vue3';
+import { ChevronDown } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import FreeChampions from '@/components/tft/FreeChampions.vue';
 import OpenCompCard from '@/components/tft/OpenCompCard.vue';
 import PlaystyleCard from '@/components/tft/PlaystyleCard.vue';
+import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import { costBorderClass, ordinal, placementClass, rankLabel } from '@/lib/tft';
@@ -61,6 +63,15 @@ const etaMinutes = computed(() => {
 });
 
 const result = computed(() => props.analysis.result);
+
+// The best few open comps are shown; the rest behind "Show all".
+const OPEN_COMPS_SHOWN = 6;
+const showAllOpenComps = ref(false);
+const visibleOpenComps = computed(() => {
+    const comps = result.value?.openComps ?? [];
+
+    return showAllOpenComps.value ? comps : comps.slice(0, OPEN_COMPS_SHOWN);
+});
 
 const opponents = computed(
     () => result.value?.players.filter((p) => !p.isSubject) ?? [],
@@ -267,11 +278,32 @@ function playerLink(gameName: string | null, tagLine: string | null) {
                     </p>
                     <ul class="flex flex-col gap-4">
                         <OpenCompCard
-                            v-for="comp in result.openComps"
+                            v-for="comp in visibleOpenComps"
                             :key="comp.key"
                             :comp="comp"
                         />
                     </ul>
+                    <Button
+                        v-if="result.openComps.length > OPEN_COMPS_SHOWN"
+                        variant="ghost"
+                        size="sm"
+                        class="mt-3 w-full"
+                        @click="showAllOpenComps = !showAllOpenComps"
+                    >
+                        <ChevronDown
+                            :class="
+                                cn(
+                                    'transition-transform',
+                                    showAllOpenComps && 'rotate-180',
+                                )
+                            "
+                        />
+                        {{
+                            showAllOpenComps
+                                ? 'Show fewer'
+                                : `Show all ${result.openComps.length} comps`
+                        }}
+                    </Button>
                 </section>
             </div>
 

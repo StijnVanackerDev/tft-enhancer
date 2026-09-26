@@ -523,7 +523,8 @@ class LobbyPredictor
         $bucket = fn (array $row) => $row['difficulty'] === null ? INF : round($row['difficulty'], 1);
         usort($rows, fn (array $a, array $b) => [$bucket($a), $a['avgPlacement']] <=> [$bucket($b), $b['avgPlacement']]);
 
-        return array_slice($rows, 0, 6);
+        // All proven comps, best first; the page shows the top few and can expand.
+        return $rows;
     }
 
     /**
