@@ -16,28 +16,18 @@ defineProps<{
 
 <template>
     <section
-        v-if="game.status !== 'none'"
+        v-if="game.status === 'in_game'"
         class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
     >
         <h2 class="mb-2 flex items-center gap-2 text-sm font-semibold">
             <Radio class="size-4 text-destructive" />
             In game now
-            <span
-                v-if="game.status === 'in_game'"
-                class="font-normal text-muted-foreground"
-            >
+            <span class="font-normal text-muted-foreground">
                 · {{ formatDuration(game.gameLength) }}
             </span>
         </h2>
 
-        <p
-            v-if="game.status === 'unavailable'"
-            class="text-sm text-muted-foreground"
-        >
-            {{ game.reason }}
-        </p>
-
-        <template v-else-if="game.status === 'in_game'">
+        <template v-if="game.status === 'in_game'">
             <ul class="mb-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                 <li
                     v-for="p in game.players"
