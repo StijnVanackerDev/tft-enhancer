@@ -136,6 +136,8 @@ export type MetaComp = {
     share: number;
     avgPlacement: number;
     top4Rate: number;
+    players: number;
+    enterable: boolean;
     units: CompUnit[];
 };
 

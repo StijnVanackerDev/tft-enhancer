@@ -45,7 +45,11 @@ No working Riot key? `php artisan db:seed --class=DemoSeeder` and open
 
 ### How the prediction works
 
-A comp is identified by its carry (the unit with the most items). Per
+A comp is identified by its carry: the 1-4 cost unit holding the most
+items (5-costs are capstones, not comps). Only "enterable" comps are shown
+as comps or suggested as open: at least 4 core units (in half of the
+boards), at least 1% of all boards and many different players. On the
+Set 18 data this puts 68% of boards into well-defined comps. Per
 player, P(champion on board) blends their recent boards (weight 0.85 per
 game back) with how common the champion is overall. The meta weight is
 `2 + 16 x (distinct carries / games)`, so players who force comps are

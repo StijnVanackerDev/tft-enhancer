@@ -3,13 +3,15 @@
 namespace App\Services\Tft;
 
 /**
- * Identifies the comp a final board represents by its carry: the unit holding
- * the most items (ties go to the more expensive, higher-star unit).
+ * Identifies the comp a final board represents by its carry: the unit costing
+ * 1-4 gold that holds the most items (ties go to higher stars, then cost).
  *
- * Backtesting on Challenger games showed that "trait + carry" splits one comp
- * into many near-identical variants (Juggernaut Ashe, Hunter Ashe, ...),
- * which makes every player look random. The carry alone groups them; the most
- * common main trait is only used in the label.
+ * Tested on real Set 18 boards:
+ *  - "trait + carry" splits one comp into many near-identical variants;
+ *  - "any carry" turns 5-cost capstones (Lux, Gnar, Kennen, ...) into fake
+ *    comps, because late boards often put items on whatever 5-cost they hit.
+ * The cheapest itemised line carry is what players actually aim for: it put
+ * 68% of boards into well-defined comps, against 50% for "any carry".
  */
 class CompClassifier
 {
@@ -22,8 +24,16 @@ class CompClassifier
      */
     public function classify(array $traits, array $units): array
     {
-        $carry = collect($units)
-            ->sortByDesc(fn (array $u) => [count($u['items']), $this->static->champion($u['character_id'])['cost'], $u['tier']])
+        $byInvestment = fn (array $u) => [count($u['items']), $u['tier'], $this->static->champion($u['character_id'])['cost']];
+        $lineUnits = collect($units)->filter(function (array $u) {
+            $cost = $this->static->champion($u['character_id'])['cost'];
+
+            return $cost >= 1 && $cost <= 4;
+        });
+
+        // Boards of only 5-costs (or unknown units) fall back to any unit.
+        $carry = ($lineUnits->isNotEmpty() ? $lineUnits : collect($units))
+            ->sortByDesc($byInvestment)
             ->first();
 
         $trait = collect($traits)

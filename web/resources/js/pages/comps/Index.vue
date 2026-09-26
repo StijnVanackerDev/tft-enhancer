@@ -8,6 +8,7 @@ defineProps<{
     set: number | null;
     comps: MetaComp[];
     totalGames: number;
+    coveredGames: number;
 }>();
 </script>
 
@@ -21,8 +22,16 @@ defineProps<{
             </h1>
             <p class="mt-1 text-sm text-muted-foreground">
                 Based on {{ totalGames }} boards from high-elo games and
-                searched players' lobbies. A comp is named after its main trait
-                and its carry (the unit holding the most items).
+                searched players' lobbies. A comp is named after its carry (the
+                1–4 cost unit holding the most items) and its most common trait.
+                Only lines you can reliably play towards are listed: a fixed
+                core of at least 4 units, played by many different players. They
+                cover
+                {{
+                    totalGames
+                        ? Math.round((coveredGames / totalGames) * 100)
+                        : 0
+                }}% of all boards; the rest are situational boards.
             </p>
         </header>
 

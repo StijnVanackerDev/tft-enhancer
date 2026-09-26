@@ -22,7 +22,7 @@ use Illuminate\Support\Collection;
  * docs in the README. A champion's contest is the expected number of
  * opponents that end up with it, compared with the usual level.
  *
- * @phpstan-type Meta array<string, array{key: string, label: string, icon: ?string, carryCost: int, games: int, share: float, avgPlacement: float, top4Rate: float, units: list<array{id: string, name: string, cost: int, icon: ?string, share: float}>}>
+ * @phpstan-type Meta array<string, array{key: string, label: string, icon: ?string, carryCost: int, games: int, share: float, avgPlacement: float, top4Rate: float, players: int, enterable: bool, units: list<array{id: string, name: string, cost: int, icon: ?string, share: float}>}>
  */
 class LobbyPredictor
 {
@@ -34,8 +34,8 @@ class LobbyPredictor
 
     private const MIN_LISTED_PROBABILITY = 0.05;
 
-    /** Comps need at least this many games (and 1% of all boards) to be suggested. */
-    private const OPEN_COMP_MIN_GAMES = 5;
+    /** Only comps that place at least this well on average are suggested. */
+    private const OPEN_COMP_MAX_AVG_PLACEMENT = 4.4;
 
     public function __construct(
         private readonly CompClassifier $classifier,
@@ -274,11 +274,11 @@ class LobbyPredictor
      */
     private function openComps(array $meta, array $expected, array $baseline, int $opponents): array
     {
-        $minGames = max(self::OPEN_COMP_MIN_GAMES, (int) ceil(array_sum(array_column($meta, 'games')) * 0.01));
         $rows = [];
 
         foreach ($meta as $key => $comp) {
-            if ($comp['games'] < $minGames || $comp['avgPlacement'] > 4.4) {
+            // Only real, repeatable lines: no situational 5-cost boards.
+            if (! $comp['enterable'] || $comp['avgPlacement'] > self::OPEN_COMP_MAX_AVG_PLACEMENT) {
                 continue;
             }
 

@@ -21,6 +21,18 @@ class MetaComps
     /** A unit counts as "core" for a comp when at least this share of its boards run it. */
     public const CORE_UNIT_SHARE = 0.5;
 
+    /**
+     * An "enterable" comp is a real, repeatable line rather than a situational
+     * board: it has at least this many core units...
+     */
+    public const ENTERABLE_MIN_CORE_UNITS = 4;
+
+    /** ...makes up at least this share of all boards... */
+    public const ENTERABLE_MIN_SHARE = 0.01;
+
+    /** ...and is played by this share of all boards' worth of different players (min 3). */
+    public const ENTERABLE_MIN_PLAYERS_SHARE = 0.005;
+
     public function __construct(
         private readonly CompClassifier $classifier,
         private readonly StaticData $static,
@@ -34,7 +46,7 @@ class MetaComps
     }
 
     /**
-     * @return list<array{key: string, label: string, icon: ?string, carryCost: int, games: int, share: float, avgPlacement: float, top4Rate: float, units: list<array{id: string, name: string, cost: int, icon: ?string, share: float}>}>
+     * @return list<array{key: string, label: string, icon: ?string, carryCost: int, games: int, share: float, avgPlacement: float, top4Rate: float, players: int, enterable: bool, units: list<array{id: string, name: string, cost: int, icon: ?string, share: float}>}>
      */
     public function forSet(?int $set): array
     {
@@ -45,22 +57,34 @@ class MetaComps
         return Cache::remember("meta-comps:{$set}", now()->addMinutes(10), function () use ($set) {
             $boards = Participant::query()
                 ->whereHas('match', fn ($q) => $q->againstPlayers()->where('set_number', $set))
-                ->get(['placement', 'traits', 'units']);
+                ->get(['puuid', 'placement', 'traits', 'units']);
 
             $groups = $boards->groupBy(fn (Participant $p) => $this->classifier->classify($p->traits, $p->units)['key']);
             $total = max(1, $groups->filter(fn (Collection $g) => $g->count() >= self::MIN_GAMES)->sum(fn (Collection $g) => $g->count()));
+            $minGames = max(self::MIN_GAMES, $boards->count() * self::ENTERABLE_MIN_SHARE);
+            $minPlayers = max(3, $boards->count() * self::ENTERABLE_MIN_PLAYERS_SHARE);
 
             return array_values($groups
                 ->filter(fn (Collection $g, string $key) => $g->count() >= self::MIN_GAMES && $key !== '-')
-                ->map(fn (Collection $g, string $key) => [
-                    'key' => $key,
-                    ...$this->classifier->describe($key, $this->mostCommonTrait($g)),
-                    'games' => $g->count(),
-                    'share' => round($g->count() / $total, 4),
-                    'avgPlacement' => round($g->avg('placement'), 2),
-                    'top4Rate' => round($g->where('placement', '<=', 4)->count() / $g->count() * 100, 1),
-                    'units' => $this->unitShares($g),
-                ])
+                ->map(function (Collection $g, string $key) use ($total, $minGames, $minPlayers) {
+                    $units = $this->unitShares($g);
+                    $core = count(array_filter($units, fn (array $u) => $u['share'] >= self::CORE_UNIT_SHARE));
+                    $players = $g->pluck('puuid')->unique()->count();
+
+                    return [
+                        'key' => $key,
+                        ...$this->classifier->describe($key, $this->mostCommonTrait($g)),
+                        'games' => $g->count(),
+                        'share' => round($g->count() / $total, 4),
+                        'avgPlacement' => round($g->avg('placement'), 2),
+                        'top4Rate' => round($g->where('placement', '<=', 4)->count() / $g->count() * 100, 1),
+                        'players' => $players,
+                        'enterable' => $core >= self::ENTERABLE_MIN_CORE_UNITS
+                            && $g->count() >= $minGames
+                            && $players >= $minPlayers,
+                        'units' => $units,
+                    ];
+                })
                 ->sortByDesc('games')
                 ->all());
         });
