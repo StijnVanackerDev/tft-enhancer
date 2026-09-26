@@ -119,12 +119,33 @@ export type ActiveGame =
           players: { riotId: string; isSubject: boolean }[];
       };
 
+export type UnitRole = 'target' | 'carry' | 'filler';
+
 export type CompUnit = {
     id: string;
     name: string;
     cost: number;
     icon: string | null;
     share: number;
+    // What the unit does in the comp, from our own boards of it.
+    role: UnitRole;
+    needed: number;
+    copies: number;
+    threeStarRate: number;
+    items: number;
+};
+
+export type KeyUnit = {
+    id: string;
+    name: string;
+    cost: number;
+    icon: string | null;
+    role: UnitRole;
+    needed: number;
+    poolSize: number;
+    left: number;
+    rolls: number | null;
+    usualRolls: number | null;
 };
 
 export type MetaComp = {
@@ -184,13 +205,17 @@ export type OpenComp = {
     key: string;
     label: string;
     icon: string | null;
+    levelling: string | null;
+    rollLevel: number;
     games: number;
     avgPlacement: number | null;
     top4Rate: number | null;
-    // Average share of the core units' pools the opponents take (0..1).
-    poolTaken: number;
-    usualPoolTaken: number;
-    units: CompUnit[];
+    // Shops to hit the hardest key unit (null: not enough copies left).
+    rolls: number | null;
+    usualRolls: number | null;
+    // rolls / usualRolls: below 1 is easier than a usual lobby.
+    difficulty: number | null;
+    keyUnits: KeyUnit[];
 };
 
 export type LobbyResult = {

@@ -28,7 +28,7 @@ use Illuminate\Support\Collection;
  * that is the share of the pool expected to be taken, compared with the
  * usual share in this set.
  *
- * @phpstan-type Meta array<string, array{key: string, label: string, icon: ?string, carryCost: int, levelling: ?string, games: int, share: float, avgPlacement: ?float, top4Rate: ?float, players: int, enterable: bool, units: list<array{id: string, name: string, cost: int, icon: ?string, share: float}>}>
+ * @phpstan-type Meta array<string, array{key: string, label: string, icon: ?string, carryCost: int, levelling: ?string, games: int, share: float, avgPlacement: ?float, top4Rate: ?float, players: int, enterable: bool, units: list<array{id: string, name: string, cost: int, icon: ?string, share: float, copies: float, threeStarRate: float, items: float, role: string, needed: int}>}>
  */
 class LobbyPredictor
 {
@@ -113,7 +113,7 @@ class LobbyPredictor
             'metaGames' => array_sum(array_column($meta, 'games')),
             'players' => $players,
             'contested' => $this->contested($expected, $holders, $this->usualCopies($baseline, $copies, $opponents)),
-            'openComps' => $this->openComps($meta, $expected, $this->usualCopies($baseline, $copies, $opponents)),
+            'openComps' => $this->openComps($meta, $expected, $this->usualCopies($baseline, $copies, $opponents), array_keys($baseline)),
         ];
     }
 
@@ -354,17 +354,27 @@ class LobbyPredictor
     }
 
     /**
-     * Well-placing comps whose core champions the opponents are least likely to take.
+     * Well-placing comps whose key champions are easiest to hit in this lobby.
+     *
+     * Only a comp's key units count (3★ targets and carries, see
+     * MetaComps::withRoles); fillers are played for traits and are easy to
+     * find. For each key unit we estimate the shops needed to find the copies
+     * the comp needs, at the level the comp rolls at, given what the
+     * opponents are expected to take. Comps are ranked by how that compares
+     * with a usual lobby.
      *
      * @param  Meta  $meta
-     * @param  array<string, float>  $expected  Expected copies taken.
-     * @param  array<string, float>  $usual  Usual copies taken.
+     * @param  array<string, float>  $expected  Expected copies taken by the opponents.
+     * @param  array<string, float>  $usual  Copies usually taken.
+     * @param  list<string>  $setUnits  All units seen in this set.
      * @return list<array<string, mixed>>
      */
-    private function openComps(array $meta, array $expected, array $usual): array
+    private function openComps(array $meta, array $expected, array $usual, array $setUnits): array
     {
         $rows = [];
         $minGames = max(self::OPEN_COMP_MIN_GAMES, array_sum(array_column($meta, 'games')) * self::OPEN_COMP_MIN_SHARE);
+        $remainingNow = $this->remainingPerCost($setUnits, $expected);
+        $remainingUsual = $this->remainingPerCost($setUnits, $usual);
 
         foreach ($meta as $key => $comp) {
             // Only suggest real, repeatable lines with a proven placement:
@@ -377,36 +387,121 @@ class LobbyPredictor
                 continue;
             }
 
-            $core = array_values(array_filter(
-                $comp['units'],
-                fn (array $u) => $u['share'] >= MetaComps::CORE_UNIT_SHARE && $this->poolSize($u['cost']) !== null,
-            ));
-            if ($core === []) {
+            $level = self::rollLevel($comp['levelling']);
+            $keyUnits = [];
+
+            foreach ($comp['units'] as $unit) {
+                $pool = $this->poolSize($unit['cost']);
+
+                if ($unit['role'] === 'filler' || $unit['needed'] === 0 || $pool === null) {
+                    continue;
+                }
+
+                $takenNow = $expected[$unit['id']] ?? 0.0;
+                $takenUsual = $usual[$unit['id']] ?? 0.0;
+
+                $keyUnits[] = [
+                    'id' => $unit['id'],
+                    'name' => $unit['name'],
+                    'cost' => $unit['cost'],
+                    'icon' => $unit['icon'],
+                    'role' => $unit['role'],
+                    'needed' => $unit['needed'],
+                    'poolSize' => $pool,
+                    'left' => round(max(0.0, $pool - $takenNow), 1),
+                    'rolls' => $this->rollsToHit($unit['needed'], $pool - $takenNow, $remainingNow[$unit['cost']] ?? 0.0, $unit['cost'], $level),
+                    'usualRolls' => $this->rollsToHit($unit['needed'], $pool - $takenUsual, $remainingUsual[$unit['cost']] ?? 0.0, $unit['cost'], $level),
+                ];
+            }
+
+            if ($keyUnits === []) {
                 continue;
             }
 
-            // Average share of each core unit's pool that the opponents take.
-            $poolTaken = fn (array $copies) => array_sum(array_map(
-                fn (array $u) => ($copies[$u['id']] ?? 0) / (int) $this->poolSize($u['cost']),
-                $core,
-            )) / count($core);
+            // 3★ targets first, then carries; most needed copies first.
+            usort($keyUnits, fn (array $a, array $b) => [$a['role'] !== 'target', -$a['needed'], $a['name']] <=> [$b['role'] !== 'target', -$b['needed'], $b['name']]);
+
+            // You roll for all key units at once, so the slowest one decides.
+            // A unit with fewer copies left than needed blocks the comp.
+            $rolls = array_column($keyUnits, 'rolls');
+            $usualRolls = array_column($keyUnits, 'usualRolls');
+            $total = in_array(null, $rolls, true) ? null : max($rolls);
+            $usualTotal = in_array(null, $usualRolls, true) ? null : max($usualRolls);
 
             $rows[] = [
                 'key' => $key,
                 'label' => $comp['label'],
                 'icon' => $comp['icon'],
+                'levelling' => $comp['levelling'],
+                'rollLevel' => $level,
                 'games' => $comp['games'],
                 'avgPlacement' => $comp['avgPlacement'],
                 'top4Rate' => $comp['top4Rate'],
-                'poolTaken' => round($poolTaken($expected), 3),
-                'usualPoolTaken' => round($poolTaken($usual), 3),
-                'units' => array_slice($core, 0, 8),
+                'rolls' => $total,
+                'usualRolls' => $usualTotal,
+                // Below 1: easier than in a usual lobby.
+                'difficulty' => $total !== null && $usualTotal ? round($total / $usualTotal, 2) : null,
+                'keyUnits' => $keyUnits,
             ];
         }
 
-        usort($rows, fn (array $a, array $b) => [$a['poolTaken'], $a['avgPlacement']] <=> [$b['poolTaken'], $b['avgPlacement']]);
+        // Small differences in difficulty are noise: group in steps of 10%,
+        // then prefer the comp that places best.
+        $bucket = fn (array $row) => $row['difficulty'] === null ? INF : round($row['difficulty'], 1);
+        usort($rows, fn (array $a, array $b) => [$bucket($a), $a['avgPlacement']] <=> [$bucket($b), $b['avgPlacement']]);
 
         return array_slice($rows, 0, 6);
+    }
+
+    /**
+     * Average shops (rerolls) needed to find $needed copies of one unit.
+     *
+     * Per shop slot, the chance to see this unit is the level's odds for its
+     * cost, times its share of all remaining copies of that cost. Copies of
+     * other units taken by opponents make it easier; copies of this unit
+     * make it harder. Returns null when fewer copies are left than needed.
+     */
+    private function rollsToHit(int $needed, float $left, float $remainingOfCost, int $cost, int $level): ?float
+    {
+        if ($left < $needed || $remainingOfCost <= 0) {
+            return null;
+        }
+
+        $odds = (float) config("tft.shop_odds.{$level}.{$cost}", 0) / 100;
+        $perShop = (int) config('tft.shop_slots', 5) * $odds * ($left / $remainingOfCost);
+
+        return $perShop > 0 ? round($needed / $perShop, 1) : null;
+    }
+
+    /**
+     * Copies left in the pool per cost, after the given copies are taken.
+     *
+     * @param  list<string>  $setUnits
+     * @param  array<string, float>  $taken
+     * @return array<int, float>
+     */
+    private function remainingPerCost(array $setUnits, array $taken): array
+    {
+        $remaining = [];
+
+        foreach ($setUnits as $unitId) {
+            $cost = $this->static->champion($unitId)['cost'];
+            $pool = $this->poolSize($cost);
+
+            if ($pool !== null) {
+                $remaining[$cost] = ($remaining[$cost] ?? 0.0) + max(0.0, $pool - ($taken[$unitId] ?? 0.0));
+            }
+        }
+
+        return $remaining;
+    }
+
+    /**
+     * The level a comp rolls at: "lvl 7" -> 7, "Fast 8" -> 8, "Fast 9" -> 9.
+     */
+    public static function rollLevel(?string $levelling): int
+    {
+        return $levelling !== null && preg_match('/(\d+)/', $levelling, $m) ? (int) $m[1] : 8;
     }
 
     /**

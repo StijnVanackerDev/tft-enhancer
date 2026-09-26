@@ -1,8 +1,15 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
+import { Star } from '@lucide/vue';
 import { cn } from '@/lib/utils';
 import { costBorderClass } from '@/lib/tft';
 import type { MetaComp } from '@/types';
+
+const roleLabel = {
+    target: '3★ target',
+    carry: 'carry / item holder',
+    filler: 'filler',
+} as const;
 
 defineProps<{
     set: number | null;
@@ -27,8 +34,8 @@ defineProps<{
                     totalGames
                         ? Math.round((coveredGames / totalGames) * 100)
                         : 0
-                }}% of all boards). Faded units are in the comp but played in
-                less than half of its boards.
+                }}% of all boards). ★ marks 3★ targets; faded units are fillers
+                played for their traits. Hover a unit for details.
             </p>
         </header>
 
@@ -82,21 +89,30 @@ defineProps<{
                         </td>
                         <td class="py-2 pr-3">
                             <div class="flex flex-wrap gap-1">
-                                <img
+                                <span
                                     v-for="unit in comp.units"
                                     :key="unit.id"
-                                    :src="unit.icon ?? undefined"
-                                    :alt="unit.name"
-                                    :title="`${unit.name} (${Math.round(unit.share * 100)}% of boards)`"
-                                    loading="lazy"
-                                    :class="
-                                        cn(
-                                            'size-7 rounded border-2 object-cover',
-                                            costBorderClass(unit.cost),
-                                            unit.share < 0.5 && 'opacity-40',
-                                        )
-                                    "
-                                />
+                                    class="relative"
+                                    :title="`${unit.name}: ${roleLabel[unit.role]} · in ${Math.round(unit.share * 100)}% of boards · ${Math.round(unit.threeStarRate * 100)}% 3★ · ${unit.items} items`"
+                                >
+                                    <img
+                                        :src="unit.icon ?? undefined"
+                                        :alt="unit.name"
+                                        loading="lazy"
+                                        :class="
+                                            cn(
+                                                'size-7 rounded border-2 object-cover',
+                                                costBorderClass(unit.cost),
+                                                unit.role === 'filler' &&
+                                                    'opacity-40',
+                                            )
+                                        "
+                                    />
+                                    <Star
+                                        v-if="unit.role === 'target'"
+                                        class="absolute -top-1 -right-1 size-3 fill-cost-5 text-cost-5"
+                                    />
+                                </span>
                             </div>
                         </td>
                         <td class="py-2 text-right tabular-nums">

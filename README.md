@@ -72,6 +72,18 @@ blended with the set average, so rerollers weigh heavily), summed and shown
 against the pool size per cost (`web/config/tft.php`: 30/25/18/10/9). The
 "usual" level is the same calculation with only the set averages.
 
+Open comps only look at a comp's key units, derived per comp from our own
+boards: "3★ targets" (3-starred in at least 40% of its boards, need 9
+copies) and "carries" (hold 1.5+ items on average, need 3 copies when
+usually 2★, else 1); fillers played for traits are ignored. For each key
+unit we estimate the shops needed to find those copies at the level the comp
+rolls at ("lvl 7" = 7, "Fast 8" = 8, "Fast 9" = 9) using the shop odds in
+`web/config/tft.php`, the copies the opponents leave and the remaining
+copies of that cost. The slowest key unit decides, compared with a usual
+lobby; differences under 10% count as "as open as usual" and then the best
+placing comp comes first. The shop odds are from recent sets and still need
+checking against the in-game tooltip.
+
 Backtested on 173 Challenger games (predicting each game from the player's
 earlier games only):
 

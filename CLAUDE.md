@@ -43,6 +43,8 @@ Tests fake the Riot API (`Http::fake`) and sleeps (`Sleep::fake()`); follow that
 - Spectator (live game) endpoints return 403 for dev keys; only past-match lobby analysis works until there is a production key.
 - Games vs bots (puuid `BOT`) are stored without the bots and excluded from all statistics (`TftMatch::againstPlayers()`).
 - Riot API calls go through `App\Services\Riot\RiotClient` + `RateLimiter` (reads limits from response headers). Web requests fail fast on long rate limits; background jobs use `waitingOnRateLimits()` and never give up.
+- Shop odds per level in `web/config/tft.php` are from recent sets and not yet verified for Set 18 (ask the user to check the in-game level odds tooltip if they matter).
+- Unit roles per comp (3★ target / carry / filler) are derived from our boards; open comps only use key units (not fillers). Thresholds are in `config('tft.roles')`.
 - Champion pool sizes per cost live in `web/config/tft.php` and `overlay/src/lib/poolSizes.js`; keep both in sync. Contest in the lobby analysis is measured in pool copies.
 - Prediction weights were chosen by backtesting on real Challenger games (see README). Re-run a backtest before changing them.
 

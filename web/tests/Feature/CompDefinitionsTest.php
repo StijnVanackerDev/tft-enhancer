@@ -6,6 +6,7 @@ use App\Enums\Platform;
 use App\Models\CompDefinition;
 use App\Models\TftMatch;
 use App\Services\Tft\CompClassifier;
+use App\Services\Tft\LobbyPredictor;
 use App\Services\Tft\MetaComps;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -112,6 +113,48 @@ class CompDefinitionsTest extends TestCase
                 ->where('comps.0.levelling', 'Fast 8')
                 ->where('comps.1.games', 0)
                 ->where('comps.1.avgPlacement', null));
+    }
+
+    public function test_unit_roles_separate_three_star_targets_carries_and_fillers(): void
+    {
+        $this->artisan('tft:import-comps', ['file' => $this->file]);
+
+        $match = TftMatch::create([
+            'match_id' => 'EUW1_ROLES', 'platform' => Platform::EUW, 'played_at' => now(),
+            'game_length' => 2000, 'game_version' => 'Version 16.19', 'set_number' => 18,
+        ]);
+        foreach (range(1, 6) as $i) {
+            $match->participants()->create([
+                'puuid' => "p{$i}", 'placement' => 3, 'level' => 7, 'gold_left' => 0, 'last_round' => 30, 'traits' => [],
+                'units' => [
+                    // Always 3★ with items: the reroll target.
+                    ['character_id' => 'U_A', 'tier' => 3, 'rarity' => 0, 'items' => ['i1', 'i2', 'i3']],
+                    // 2★ holding items: a carry that needs 3 copies.
+                    ['character_id' => 'U_B', 'tier' => 2, 'rarity' => 0, 'items' => ['i1', 'i2']],
+                    // Trait bots without items.
+                    ['character_id' => 'U_C', 'tier' => 2, 'rarity' => 0, 'items' => []],
+                    ['character_id' => 'U_D', 'tier' => 1, 'rarity' => 0, 'items' => []],
+                ],
+            ]);
+        }
+
+        $comp = collect(app(MetaComps::class)->forSet(18))->firstWhere('games', 6);
+        $units = collect($comp['units'])->keyBy('id');
+
+        $this->assertSame('target', $units['U_A']['role']);
+        $this->assertSame(9, $units['U_A']['needed']);
+        $this->assertSame('carry', $units['U_B']['role']);
+        $this->assertSame(3, $units['U_B']['needed']);
+        $this->assertSame('filler', $units['U_C']['role']);
+        $this->assertSame(0, $units['U_D']['needed']);
+    }
+
+    public function test_roll_level_follows_the_comps_levelling(): void
+    {
+        $this->assertSame(7, LobbyPredictor::rollLevel('lvl 7'));
+        $this->assertSame(8, LobbyPredictor::rollLevel('Fast 8'));
+        $this->assertSame(9, LobbyPredictor::rollLevel('Fast 9'));
+        $this->assertSame(8, LobbyPredictor::rollLevel(null));
     }
 
     /**

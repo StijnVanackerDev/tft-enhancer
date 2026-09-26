@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, usePoll } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import OpenCompCard from '@/components/tft/OpenCompCard.vue';
 import PlaystyleCard from '@/components/tft/PlaystyleCard.vue';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
@@ -244,8 +245,10 @@ function playerLink(gameName: string | null, tagLine: string | null) {
                 >
                     <h2 class="text-sm font-semibold">Likely open comps</h2>
                     <p class="mb-3 text-xs text-muted-foreground">
-                        Comps that place well overall and whose core champions
-                        the opponents are least likely to take.
+                        Comps that place well and whose key champions are
+                        easiest to hit in this lobby. ★ = 3★ target, sword =
+                        carry or item tank; filler units are ignored. Hover a
+                        champion for the details.
                     </p>
                     <p
                         v-if="result.openComps.length === 0"
@@ -255,52 +258,12 @@ function playerLink(gameName: string | null, tagLine: string | null) {
                         <code>php artisan tft:crawl-meta</code> to import
                         high-elo games.
                     </p>
-                    <ul class="flex flex-col gap-3">
-                        <li v-for="comp in result.openComps" :key="comp.key">
-                            <div class="flex items-center gap-2 text-sm">
-                                <img
-                                    v-if="comp.icon"
-                                    :src="comp.icon"
-                                    :alt="comp.label"
-                                    class="size-6 rounded object-cover"
-                                    loading="lazy"
-                                />
-                                <span class="flex-1 font-medium">{{
-                                    comp.label
-                                }}</span>
-                                <span
-                                    class="text-xs text-muted-foreground tabular-nums"
-                                >
-                                    <template v-if="comp.avgPlacement !== null"
-                                        >avg
-                                        {{ comp.avgPlacement.toFixed(2) }}
-                                        ·</template
-                                    >
-                                    pool taken
-                                    {{ Math.round(comp.poolTaken * 100) }}%
-                                    (usual
-                                    {{
-                                        Math.round(comp.usualPoolTaken * 100)
-                                    }}%)
-                                </span>
-                            </div>
-                            <div class="mt-1 flex flex-wrap gap-1">
-                                <img
-                                    v-for="unit in comp.units"
-                                    :key="unit.id"
-                                    :src="unit.icon ?? undefined"
-                                    :alt="unit.name"
-                                    :title="unit.name"
-                                    loading="lazy"
-                                    :class="
-                                        cn(
-                                            'size-7 rounded border-2 object-cover',
-                                            costBorderClass(unit.cost),
-                                        )
-                                    "
-                                />
-                            </div>
-                        </li>
+                    <ul class="flex flex-col gap-4">
+                        <OpenCompCard
+                            v-for="comp in result.openComps"
+                            :key="comp.key"
+                            :comp="comp"
+                        />
                     </ul>
                 </section>
             </div>
