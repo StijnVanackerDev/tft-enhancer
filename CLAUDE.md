@@ -41,7 +41,7 @@ Tests fake the Riot API (`Http::fake`) and sleeps (`Sleep::fake()`); follow that
 
 - **Riot policy**: no augment data anywhere (not stored, not shown), no Legend win rates. Lobby/player aggregate stats during gameplay are not allowed.
 - **Lobby analysis** is behind `LOBBY_ANALYSIS_ENABLED` (true locally, must stay unset/false on Render). Don't make it live, and don't describe the product to Riot or Overwolf differently from what it does.
-- Spectator (live game) endpoints return 403 for dev keys; only past-match lobby analysis works until there is a production key.
+- Spectator (live game) endpoints return 403 for dev keys; until there is a production key use past-match lobbies or the manual lobby form (source `manual`, Riot IDs looked up in the job). All of these are behind the lobby analysis flag.
 - Games vs bots (puuid `BOT`) are stored without the bots and excluded from all statistics (`TftMatch::againstPlayers()`).
 - Riot API calls go through `App\Services\Riot\RiotClient` + `RateLimiter` (reads limits from response headers). Web requests fail fast on long rate limits; background jobs use `waitingOnRateLimits()` and never give up.
 - Shop odds per level in `web/config/tft.php` are from recent sets and not yet verified for Set 18 (ask the user to check the in-game level odds tooltip if they matter).

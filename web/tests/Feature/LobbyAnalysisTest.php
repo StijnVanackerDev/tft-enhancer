@@ -97,6 +97,63 @@ class LobbyAnalysisTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->where('matches.0.lobbyAnalysisId', $analysis->id));
     }
 
+    public function test_a_lobby_can_be_entered_by_hand(): void
+    {
+        config(['features.lobby_analysis' => true]);
+        Queue::fake();
+        $player = Player::factory()->create(['game_name' => 'Myself', 'tag_line' => 'EUW']);
+
+        // Invalid Riot IDs are rejected.
+        $this->post(route('lobby.store', $player), ['source' => 'manual', 'names' => "Someone#EUW\nno tag here"])
+            ->assertSessionHasErrors('names');
+
+        // At most 7 other players.
+        $eight = implode(',', array_map(fn (int $i) => "Player{$i}#EUW", range(1, 8)));
+        $this->post(route('lobby.store', $player), ['source' => 'manual', 'names' => $eight])
+            ->assertSessionHasErrors('names');
+
+        // Lines, commas and semicolons all work; the searched player is left out.
+        $this->post(route('lobby.store', $player), ['source' => 'manual', 'names' => "Bravo#EUW, Alpha#1234\nmyself#euw; Charlie#EUW"]);
+
+        $analysis = LobbyAnalysis::sole();
+        $this->assertSame('manual', $analysis->source);
+        $this->assertCount(4, $analysis->participants);
+        $this->assertSame($player->puuid, $analysis->participants[0]['puuid']);
+        $this->assertNull($analysis->participants[1]['puuid']);
+        Queue::assertPushed(AnalyzeLobby::class);
+
+        // The same names in another order within the hour reuse the analysis.
+        $this->post(route('lobby.store', $player), ['source' => 'manual', 'names' => 'Charlie#EUW;Alpha#1234;Bravo#EUW'])
+            ->assertRedirect(route('lobby.show', $analysis));
+        $this->assertSame(1, LobbyAnalysis::count());
+    }
+
+    public function test_the_job_looks_up_entered_riot_ids_and_reports_unknown_ones(): void
+    {
+        config(['features.lobby_analysis' => true]);
+        [$player] = $this->lobbyMatch();
+
+        Http::fake(function ($request) {
+            $url = $request->url();
+
+            return match (true) {
+                str_contains($url, '/accounts/by-riot-id/Found/EUW') => Http::response(['puuid' => 'p1', 'gameName' => 'Found', 'tagLine' => 'EUW']),
+                str_contains($url, '/accounts/by-riot-id/') => Http::response([], 404),
+                str_contains($url, '/tft/league/v1/by-puuid/') => Http::response([]),
+                str_contains($url, '/ids') => Http::response([]),
+                default => Http::response([], 404),
+            };
+        });
+
+        $this->post(route('lobby.store', $player), ['source' => 'manual', 'names' => "Found#EUW\nGhost#EUW"]);
+
+        $analysis = LobbyAnalysis::sole()->fresh();
+        $this->assertSame('done', $analysis->status, (string) $analysis->message);
+        $this->assertSame(['Ghost#EUW'], $analysis->result['notFound']);
+        $this->assertSame(['p0', 'p1'], array_column($analysis->participants, 'puuid'));
+        $this->assertCount(2, $analysis->result['players']);
+    }
+
     public function test_the_job_loads_every_players_history_and_predicts_the_lobby(): void
     {
         config(['features.lobby_analysis' => true]);

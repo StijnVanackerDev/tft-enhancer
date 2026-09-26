@@ -39,7 +39,6 @@ class AnalyzeLobby implements ShouldQueue
         $analysis = $this->analysis;
         $platform = $analysis->platform;
         $perPlayer = config('services.riot.lobby_history');
-        $players = $analysis->participants;
 
         $riot = $riot->waitingOnRateLimits(function (float $seconds) use ($analysis) {
             $analysis->status = 'waiting';
@@ -47,6 +46,9 @@ class AnalyzeLobby implements ShouldQueue
             $analysis->message = 'Waiting for the Riot API rate limit';
             $analysis->save();
         });
+
+        // Manually entered lobbies only have Riot IDs: look those up first.
+        [$players, $notFound] = $this->resolveRiotIds($riot, $analysis);
 
         // First estimate: rank + match list per player, and up to a full
         // history each. Corrected once we know which matches we already have.
@@ -103,8 +105,65 @@ class AnalyzeLobby implements ShouldQueue
             'message' => null,
             'waiting_until' => null,
             'progress_done' => $analysis->progress_total,
-            'result' => $predictor->predict($lobby, $analysis->set_number, $analysis->player->puuid),
+            'result' => [
+                ...$predictor->predict($lobby, $analysis->set_number, $analysis->player->puuid),
+                // Entered Riot IDs that don't exist on this server.
+                'notFound' => $notFound,
+            ],
         ]);
+    }
+
+    /**
+     * Looks up the puuid of every participant that only has a Riot ID, and
+     * stores the resolved lobby. Unknown Riot IDs are left out.
+     *
+     * @return array{list<array{puuid: string, gameName: ?string, tagLine: ?string}>, list<string>}
+     */
+    private function resolveRiotIds(RiotClient $riot, LobbyAnalysis $analysis): array
+    {
+        $unresolved = array_filter($analysis->participants, fn (array $m) => $m['puuid'] === null);
+
+        if ($unresolved !== []) {
+            $analysis->update([
+                'status' => 'running',
+                'progress_done' => 0,
+                'progress_total' => count($unresolved),
+                'message' => 'Looking up Riot IDs',
+            ]);
+        }
+
+        $players = [];
+        $notFound = [];
+
+        foreach ($analysis->participants as $member) {
+            if ($member['puuid'] !== null) {
+                $players[$member['puuid']] = $member;
+
+                continue;
+            }
+
+            $riotId = "{$member['gameName']}#{$member['tagLine']}";
+            $account = $riot->accountByRiotId($analysis->platform, (string) $member['gameName'], (string) $member['tagLine']);
+            $analysis->advance("Looked up {$riotId}");
+
+            if ($account === null) {
+                $notFound[] = $riotId;
+
+                continue;
+            }
+
+            $players[$account['puuid']] = [
+                'puuid' => $account['puuid'],
+                'gameName' => $account['gameName'],
+                'tagLine' => $account['tagLine'],
+            ];
+        }
+
+        if ($unresolved !== []) {
+            $analysis->update(['participants' => array_values($players)]);
+        }
+
+        return [array_values($players), $notFound];
     }
 
     public function failed(?Throwable $e): void

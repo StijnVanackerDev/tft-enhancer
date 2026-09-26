@@ -121,6 +121,9 @@ function playerLink(gameName: string | null, tagLine: string | null) {
                     {{ analysis.sourceId }}, compared with what they actually
                     played.
                 </template>
+                <template v-else-if="analysis.source === 'manual'">
+                    Lobby entered by hand. Based on each player's recent games.
+                </template>
                 <template v-else>
                     Based on each player's recent games.
                 </template>
@@ -197,6 +200,14 @@ function playerLink(gameName: string | null, tagLine: string | null) {
             class="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm"
         >
             {{ analysis.message }}
+        </div>
+
+        <div
+            v-if="result?.notFound?.length"
+            class="rounded-lg border border-cost-5/40 bg-cost-5/10 px-4 py-3 text-sm"
+        >
+            Not found on this server, so left out:
+            {{ result.notFound.join(', ') }}
         </div>
 
         <template v-if="result">

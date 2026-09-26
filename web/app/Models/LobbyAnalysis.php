@@ -17,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property Platform $platform
  * @property string $source
  * @property string $source_id
- * @property list<array{puuid: string, gameName: ?string, tagLine: ?string}> $participants
+ * @property list<array{puuid: ?string, gameName: ?string, tagLine: ?string}> $participants Manual lobbies start without puuids; the job looks them up.
  * @property CarbonImmutable|null $history_before
  * @property int|null $set_number
  * @property string $status
@@ -41,6 +41,12 @@ class LobbyAnalysis extends Model
     public const SOURCE_MATCH = 'match';
 
     public const SOURCE_LIVE = 'live';
+
+    /** Riot IDs entered by hand, for when live game lookups aren't available. */
+    public const SOURCE_MANUAL = 'manual';
+
+    /** Opponents that can be entered for a manual lobby. */
+    public const MAX_MANUAL_OPPONENTS = 7;
 
     /**
      * @return array<string, string>

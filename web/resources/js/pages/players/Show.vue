@@ -3,6 +3,7 @@ import { Deferred, Form, Head, usePoll } from '@inertiajs/vue3';
 import { RefreshCw } from '@lucide/vue';
 import { computed, watch } from 'vue';
 import ActiveGamePanel from '@/components/tft/ActiveGamePanel.vue';
+import ManualLobbyForm from '@/components/tft/ManualLobbyForm.vue';
 import MatchCard from '@/components/tft/MatchCard.vue';
 import PlaystyleCard from '@/components/tft/PlaystyleCard.vue';
 import StatTable from '@/components/tft/StatTable.vue';
@@ -214,6 +215,11 @@ const stats = computed(() => [
                         :game="activeGame"
                     />
                 </Deferred>
+                <ManualLobbyForm
+                    v-if="features.lobbyAnalysis"
+                    :player-id="player.id"
+                    :riot-id="`${player.gameName}#${player.tagLine}`"
+                />
                 <PlaystyleCard
                     :playstyle="playstyle"
                     :title="set ? `Playstyle (Set ${set})` : 'Playstyle'"

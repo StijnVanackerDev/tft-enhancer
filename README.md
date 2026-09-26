@@ -58,7 +58,8 @@ No working Riot key? `php artisan db:seed --class=DemoSeeder` and open
   Riot's TFT policy does not allow showing lobby/player aggregate stats
   during gameplay, so keep it off in production unless Riot approves it.
   Live games need the spectator endpoint, which development keys can't use;
-  past matches work with any key. Locally, `composer run dev` runs the queue
+  past matches work with any key, and a lobby can also be entered by hand
+  (up to 7 Riot IDs on the player page; unknown IDs are skipped and listed). Locally, `composer run dev` runs the queue
   worker the analysis needs.
 
 ### How the prediction works

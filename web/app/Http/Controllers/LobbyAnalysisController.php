@@ -28,22 +28,25 @@ class LobbyAnalysisController extends Controller
         abort_unless(config('features.lobby_analysis'), 404);
 
         $validated = $request->validate([
-            'source' => ['required', Rule::in([LobbyAnalysis::SOURCE_MATCH, LobbyAnalysis::SOURCE_LIVE])],
+            'source' => ['required', Rule::in([LobbyAnalysis::SOURCE_MATCH, LobbyAnalysis::SOURCE_LIVE, LobbyAnalysis::SOURCE_MANUAL])],
             'match_id' => ['required_if:source,match', 'nullable', 'string'],
+            'names' => ['required_if:source,manual', 'nullable', 'string', 'max:1000'],
         ]);
 
-        $attributes = $validated['source'] === LobbyAnalysis::SOURCE_MATCH
-            ? $this->fromMatch($player, (string) $validated['match_id'])
-            : $this->fromLiveGame($player, $riot, $meta);
+        $attributes = match ($validated['source']) {
+            LobbyAnalysis::SOURCE_MATCH => $this->fromMatch($player, (string) $validated['match_id']),
+            LobbyAnalysis::SOURCE_MANUAL => $this->fromNames($player, (string) $validated['names'], $meta),
+            default => $this->fromLiveGame($player, $riot, $meta),
+        };
 
         // A finished match never changes, so its analysis is reused forever;
-        // a live game only for an hour.
+        // a live or manually entered lobby only for an hour.
         $existing = LobbyAnalysis::query()
             ->where('source', $attributes['source'])
             ->where('source_id', $attributes['source_id'])
             ->where('status', '!=', 'failed')
             ->when(
-                $attributes['source'] === LobbyAnalysis::SOURCE_LIVE,
+                $attributes['source'] !== LobbyAnalysis::SOURCE_MATCH,
                 fn ($q) => $q->where('created_at', '>', now()->subHour()),
             )
             ->latest()
@@ -105,6 +108,67 @@ class LobbyAnalysisController extends Controller
                 ->map(fn ($p) => ['puuid' => $p->puuid, 'gameName' => $p->game_name, 'tagLine' => $p->tag_line])
                 ->values()
                 ->all(),
+        ];
+    }
+
+    /**
+     * A lobby typed in by hand: the searched player plus up to 7 Riot IDs
+     * ("Name#TAG", one per line or separated by commas/semicolons).
+     *
+     * @return array<string, mixed>
+     */
+    private function fromNames(Player $player, string $names, MetaComps $meta): array
+    {
+        $opponents = [];
+        $invalid = [];
+
+        foreach (preg_split('/[\r\n,;]+/', $names) ?: [] as $line) {
+            $riotId = trim($line);
+
+            if ($riotId === '') {
+                continue;
+            }
+
+            if (! preg_match('/^([^#]{3,16})#([\pL\pN]{2,5})$/u', $riotId, $m)) {
+                $invalid[] = $riotId;
+
+                continue;
+            }
+
+            $gameName = trim($m[1]);
+            $tagLine = trim($m[2]);
+            $key = Str::lower("{$gameName}#{$tagLine}");
+
+            // The searched player is always part of the lobby already.
+            if ($key !== Str::lower($player->riot_id)) {
+                $opponents[$key] = ['puuid' => null, 'gameName' => $gameName, 'tagLine' => $tagLine];
+            }
+        }
+
+        if ($invalid !== []) {
+            throw ValidationException::withMessages([
+                'names' => 'Not a valid Riot ID (use Name#TAG): '.implode(', ', array_slice($invalid, 0, 3)),
+            ]);
+        }
+
+        if ($opponents === [] || count($opponents) > LobbyAnalysis::MAX_MANUAL_OPPONENTS) {
+            throw ValidationException::withMessages([
+                'names' => sprintf('Enter between 1 and %d other players.', LobbyAnalysis::MAX_MANUAL_OPPONENTS),
+            ]);
+        }
+
+        ksort($opponents);
+
+        return [
+            'source' => LobbyAnalysis::SOURCE_MANUAL,
+            // Same names in any order = same lobby.
+            'source_id' => substr(sha1($player->puuid.'|'.implode('|', array_keys($opponents))), 0, 40),
+            'history_before' => null,
+            'set_number' => $meta->latestSet(),
+            'participants' => [
+                ['puuid' => $player->puuid, 'gameName' => $player->game_name, 'tagLine' => $player->tag_line],
+                ...array_values($opponents),
+            ],
         ];
     }
 

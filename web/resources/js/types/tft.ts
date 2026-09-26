@@ -237,6 +237,8 @@ export type LobbyResult = {
     // Missing in analyses made before these fields existed.
     free?: FreeChampion[];
     anyOpen?: boolean;
+    // Manually entered Riot IDs that couldn't be found.
+    notFound?: string[];
     bracket?: {
         lobby: string | null;
         comparedWith: string | null;
@@ -247,7 +249,7 @@ export type LobbyResult = {
 
 export type LobbyAnalysis = {
     id: string;
-    source: 'match' | 'live';
+    source: 'match' | 'live' | 'manual';
     sourceId: string;
     status: 'queued' | 'running' | 'waiting' | 'done' | 'failed';
     progressDone: number;
