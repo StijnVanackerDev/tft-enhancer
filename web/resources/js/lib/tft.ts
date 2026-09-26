@@ -92,3 +92,27 @@ export function timeAgo(iso: string): string {
 
     return 'just now';
 }
+
+type RankLike = {
+    tier: string | null;
+    division: string | null;
+    lp: number;
+} | null;
+
+export function rankLabel(rank: RankLike): string {
+    if (!rank?.tier) {
+        return 'Unranked';
+    }
+
+    const tier = rank.tier.charAt(0) + rank.tier.slice(1).toLowerCase();
+    // Master and above have no division.
+    const division = ['MASTER', 'GRANDMASTER', 'CHALLENGER'].includes(rank.tier)
+        ? ''
+        : ` ${rank.division}`;
+
+    return `${tier}${division} · ${rank.lp} LP`;
+}
+
+export function percent(value: number | null, digits = 0): string {
+    return value === null ? '–' : `${(value * 100).toFixed(digits)}%`;
+}

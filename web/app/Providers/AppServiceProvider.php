@@ -2,9 +2,11 @@
 
 namespace App\Providers;
 
+use App\Services\Riot\RateLimiter;
 use App\Services\Riot\RiotClient;
 use App\Services\Tft\StaticData;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
@@ -17,8 +19,14 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->singleton(RateLimiter::class, fn (): RateLimiter => new RateLimiter(
+            Cache::store(),
+            RateLimiter::parse(config('services.riot.rate_limits')),
+        ));
+
         $this->app->singleton(RiotClient::class, fn (): RiotClient => new RiotClient(
             config('services.riot.key'),
+            $this->app->make(RateLimiter::class),
         ));
 
         $this->app->singleton(StaticData::class);

@@ -31,6 +31,11 @@ return [
     'riot' => [
         'key' => env('RIOT_API_KEY'),
         'match_count' => (int) env('RIOT_MATCH_COUNT', 20),
+        // Matches per player loaded for a lobby analysis.
+        'lobby_history' => (int) env('RIOT_LOBBY_HISTORY', 15),
+        // Used until Riot reports the real limits in its response headers.
+        // Development keys: 20 per second and 100 per 2 minutes.
+        'rate_limits' => env('RIOT_RATE_LIMITS', '20:1,100:120'),
     ],
 
     'slack' => [

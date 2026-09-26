@@ -9,6 +9,7 @@ use App\Models\Player;
 use App\Services\Riot\RiotApiException;
 use App\Services\Riot\RiotClient;
 use App\Services\Tft\PlayerStats;
+use App\Services\Tft\Playstyle;
 use App\Services\Tft\StaticData;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,6 +26,7 @@ class PlayerController extends Controller
         private readonly RiotClient $riot,
         private readonly StaticData $static,
         private readonly PlayerStats $stats,
+        private readonly Playstyle $playstyle,
     ) {}
 
     /**
@@ -85,7 +87,14 @@ class PlayerController extends Controller
             'set' => $latestSet,
             'units' => $this->stats->units($setGames),
             'traits' => $this->stats->traits($setGames),
+            'playstyle' => $this->playstyle->profile($setGames->values(), $this->playstyle->levelByStage($latestSet)),
             'matches' => $games->map(fn (Participant $p) => $this->presentGame($p))->values(),
+            'features' => ['lobbyAnalysis' => (bool) config('features.lobby_analysis')],
+            // Checked after the page has loaded, so a slow or forbidden
+            // spectator call never delays the page itself.
+            'activeGame' => config('features.lobby_analysis')
+                ? Inertia::defer(fn () => $this->activeGame($player))
+                : null,
         ]);
     }
 
@@ -96,6 +105,39 @@ class PlayerController extends Controller
         }
 
         return back();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function activeGame(Player $player): array
+    {
+        try {
+            $game = $this->riot->activeGame($player->platform, $player->puuid);
+        } catch (RiotApiException $e) {
+            return [
+                'status' => 'unavailable',
+                'reason' => $e->getCode() === 403
+                    ? 'Riot only allows live game lookups for approved products; this API key can\'t use it yet.'
+                    : $e->getMessage(),
+            ];
+        }
+
+        if ($game === null) {
+            return ['status' => 'none'];
+        }
+
+        /** @var list<array<string, mixed>> $participants */
+        $participants = $game['participants'] ?? [];
+
+        return [
+            'status' => 'in_game',
+            'gameLength' => (int) ($game['gameLength'] ?? 0),
+            'players' => array_map(fn (array $p) => [
+                'riotId' => (string) ($p['riotId'] ?? 'Unknown'),
+                'isSubject' => ($p['puuid'] ?? null) === $player->puuid,
+            ], $participants),
+        ];
     }
 
     /**

@@ -4,6 +4,7 @@ import AppLogo from '@/components/AppLogo.vue';
 import PlayerSearch from '@/components/tft/PlayerSearch.vue';
 import { Toaster } from '@/components/ui/sonner';
 import { dashboard, home, login, register } from '@/routes';
+import { index as comps } from '@/routes/comps';
 
 const page = usePage();
 </script>
@@ -26,6 +27,7 @@ const page = usePage();
                     <PlayerSearch compact />
                 </div>
                 <nav class="ml-auto flex items-center gap-4 text-sm">
+                    <Link :href="comps()">Comps</Link>
                     <Link v-if="page.props.auth.user" :href="dashboard()">
                         Dashboard
                     </Link>

@@ -7,7 +7,6 @@ use App\Jobs\SyncPlayerMatches;
 use App\Models\Participant;
 use App\Models\Player;
 use App\Models\TftMatch;
-use App\Services\Riot\RiotClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
@@ -114,7 +113,7 @@ class PlayerTest extends TestCase
         ]);
 
         $player->claimSync();
-        (new SyncPlayerMatches($player))->handle(app(RiotClient::class));
+        app()->call([new SyncPlayerMatches($player), 'handle']);
 
         $player->refresh();
         $this->assertFalse($player->isSyncing());
@@ -135,12 +134,12 @@ class PlayerTest extends TestCase
         Http::fake(['*' => Http::response([], 403)]);
 
         $player->claimSync();
-        (new SyncPlayerMatches($player))->handle(app(RiotClient::class));
+        app()->call([new SyncPlayerMatches($player), 'handle']);
 
         $player->refresh();
         $this->assertFalse($player->isSyncing());
         $this->assertNull($player->synced_at);
-        $this->assertStringContainsString('invalid or expired', $player->sync_error);
+        $this->assertStringContainsString('invalid, expired', $player->sync_error);
     }
 
     public function test_sync_cannot_be_claimed_twice(): void

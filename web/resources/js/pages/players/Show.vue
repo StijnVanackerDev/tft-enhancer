@@ -1,14 +1,23 @@
 <script setup lang="ts">
-import { Form, Head, usePoll } from '@inertiajs/vue3';
+import { Deferred, Form, Head, usePoll } from '@inertiajs/vue3';
 import { RefreshCw } from '@lucide/vue';
 import { computed, watch } from 'vue';
+import ActiveGamePanel from '@/components/tft/ActiveGamePanel.vue';
 import MatchCard from '@/components/tft/MatchCard.vue';
+import PlaystyleCard from '@/components/tft/PlaystyleCard.vue';
 import StatTable from '@/components/tft/StatTable.vue';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import { ordinal, timeAgo } from '@/lib/tft';
+import { ordinal, rankLabel, timeAgo } from '@/lib/tft';
 import { refresh } from '@/routes/players';
-import type { Game, Player, StatRow, Summary } from '@/types';
+import type {
+    ActiveGame,
+    Game,
+    Player,
+    Playstyle,
+    StatRow,
+    Summary,
+} from '@/types';
 
 const props = defineProps<{
     player: Player;
@@ -16,31 +25,36 @@ const props = defineProps<{
     set: number | null;
     units: StatRow[];
     traits: StatRow[];
+    playstyle: Playstyle;
     matches: Game[];
+    features: { lobbyAnalysis: boolean };
+    activeGame?: ActiveGame | null;
 }>();
 
 // While a sync runs in the background, reload the page data every 2 seconds.
-const { start, stop } = usePoll(2000, {}, { autoStart: false });
+// The live game check is deferred and doesn't need to be repeated.
+const { start, stop } = usePoll(
+    2000,
+    {
+        only: [
+            'player',
+            'summary',
+            'set',
+            'units',
+            'traits',
+            'playstyle',
+            'matches',
+        ],
+    },
+    { autoStart: false },
+);
 watch(
     () => props.player.isSyncing,
     (syncing) => (syncing ? start() : stop()),
     { immediate: true },
 );
 
-const rankLabel = computed(() => {
-    const rank = props.player.rank;
-    if (!rank?.tier) {
-        return 'Unranked';
-    }
-
-    const tier = rank.tier.charAt(0) + rank.tier.slice(1).toLowerCase();
-    // Master and above have no division.
-    const division = ['MASTER', 'GRANDMASTER', 'CHALLENGER'].includes(rank.tier)
-        ? ''
-        : ` ${rank.division}`;
-
-    return `${tier}${division} · ${rank.lp} LP`;
-});
+const rankText = computed(() => rankLabel(props.player.rank));
 
 const maxPlacementCount = computed(() =>
     Math.max(1, ...props.summary.placements),
@@ -77,7 +91,7 @@ const stats = computed(() => [
                     >
                 </h1>
                 <p class="mt-1 text-sm text-muted-foreground">
-                    {{ player.platformLabel }} · {{ rankLabel }}
+                    {{ player.platformLabel }} · {{ rankText }}
                     <template v-if="player.rank">
                         · {{ player.rank.wins }}W {{ player.rank.losses }}L
                     </template>
@@ -179,10 +193,31 @@ const stats = computed(() => [
                     v-for="game in matches"
                     :key="game.id"
                     :game="game"
+                    :analyse-player-id="
+                        features.lobbyAnalysis ? player.id : undefined
+                    "
                 />
             </section>
 
             <aside class="flex flex-col gap-6">
+                <Deferred v-if="features.lobbyAnalysis" data="activeGame">
+                    <template #fallback>
+                        <div
+                            class="flex items-center gap-2 text-xs text-muted-foreground"
+                        >
+                            <Spinner /> Checking for a live game…
+                        </div>
+                    </template>
+                    <ActiveGamePanel
+                        v-if="activeGame"
+                        :player-id="player.id"
+                        :game="activeGame"
+                    />
+                </Deferred>
+                <PlaystyleCard
+                    :playstyle="playstyle"
+                    :title="set ? `Playstyle (Set ${set})` : 'Playstyle'"
+                />
                 <StatTable
                     :title="set ? `Your units (Set ${set})` : 'Your units'"
                     :rows="units"

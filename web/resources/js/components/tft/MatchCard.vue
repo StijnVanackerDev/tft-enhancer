@@ -1,5 +1,9 @@
 <script setup lang="ts">
+import { Form } from '@inertiajs/vue3';
+import { Users } from '@lucide/vue';
 import UnitIcon from '@/components/tft/UnitIcon.vue';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import {
     formatDuration,
@@ -9,10 +13,13 @@ import {
     timeAgo,
     traitStyleClass,
 } from '@/lib/tft';
+import { store as analyseLobby } from '@/routes/lobby';
 import type { Game } from '@/types';
 
 defineProps<{
     game: Game;
+    // Set when lobby analysis is enabled: shows the "Analyse lobby" button.
+    analysePlayerId?: number;
 }>();
 </script>
 
@@ -38,6 +45,26 @@ defineProps<{
                     {{ formatDuration(game.duration) }} · lvl {{ game.level }} ·
                     {{ roundToStage(game.lastRound) }}
                 </div>
+                <Form
+                    v-if="analysePlayerId"
+                    v-bind="analyseLobby.form(analysePlayerId)"
+                    v-slot="{ processing }"
+                    class="mt-1"
+                >
+                    <input type="hidden" name="source" value="match" />
+                    <input type="hidden" name="match_id" :value="game.id" />
+                    <Button
+                        type="submit"
+                        variant="outline"
+                        size="sm"
+                        class="h-6 px-2 text-[11px]"
+                        :disabled="processing"
+                    >
+                        <Spinner v-if="processing" />
+                        <Users v-else class="size-3" />
+                        Analyse lobby
+                    </Button>
+                </Form>
             </div>
         </div>
 
