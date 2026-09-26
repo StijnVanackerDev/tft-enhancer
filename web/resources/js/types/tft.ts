@@ -201,6 +201,13 @@ export type ContestedChampion = {
     players: { name: string; copies: number }[];
 };
 
+export type FreeChampion = ContestedChampion & {
+    // Expected copies taken / usual copies taken (below 1 = freer).
+    ratio: number;
+    // Proven comps this champion is a key unit of.
+    keyIn: string[];
+};
+
 export type OpenComp = {
     key: string;
     label: string;
@@ -223,6 +230,8 @@ export type LobbyResult = {
     metaGames: number;
     players: LobbyPlayer[];
     contested: ContestedChampion[];
+    // Missing in analyses made before this list existed.
+    free?: FreeChampion[];
     openComps: OpenComp[];
 };
 

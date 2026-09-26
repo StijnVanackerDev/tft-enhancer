@@ -48,7 +48,9 @@ No working Riot key? `php artisan db:seed --class=DemoSeeder` and open
   damage to players, so "tempo" is estimated from levels.
 - **Lobby analysis** (behind `LOBBY_ANALYSIS_ENABLED`, off by default):
   loads rank and recent games of all 8 players of a lobby in a queued job
-  and predicts contested champions, likely comps per player and open comps.
+  and predicts contested champions, likely free champions (key units of
+  proven comps that are less contested than usual), likely comps per player
+  and open comps.
   Riot's TFT policy does not allow showing lobby/player aggregate stats
   during gameplay, so keep it off in production unless Riot approves it.
   Live games need the spectator endpoint, which development keys can't use;

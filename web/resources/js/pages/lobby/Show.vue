@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, usePoll } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import FreeChampions from '@/components/tft/FreeChampions.vue';
 import OpenCompCard from '@/components/tft/OpenCompCard.vue';
 import PlaystyleCard from '@/components/tft/PlaystyleCard.vue';
 import { Spinner } from '@/components/ui/spinner';
@@ -158,87 +159,93 @@ function playerLink(gameName: string | null, tagLine: string | null) {
 
         <template v-if="result">
             <div class="grid gap-6 lg:grid-cols-2">
-                <section
-                    class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
-                >
-                    <h2 class="text-sm font-semibold">
-                        Likely contested champions
-                    </h2>
-                    <p class="mb-3 text-xs text-muted-foreground">
-                        Expected copies the opponents take out of each
-                        champion's pool (1★ = 1, 2★ = 3, 3★ = 9), out of the
-                        pool size. The bar is the share of the pool; the grey
-                        mark is the usual level in this set, red means more
-                        contested than usual.
-                    </p>
-                    <ul class="flex flex-col gap-1.5">
-                        <li
-                            v-for="champ in result.contested.slice(0, 14)"
-                            :key="champ.id"
-                            class="flex items-center gap-2 text-sm"
-                            :title="
-                                [
-                                    `Usually ${champ.usualCopies} of ${champ.poolSize} copies taken`,
-                                    ...champ.players.map(
-                                        (p) => `${p.name}: ${p.copies} copies`,
-                                    ),
-                                ].join('\n')
-                            "
-                        >
-                            <img
-                                v-if="champ.icon"
-                                :src="champ.icon"
-                                :alt="champ.name"
-                                loading="lazy"
-                                :class="
-                                    cn(
-                                        'size-7 rounded border-2 object-cover',
-                                        costBorderClass(champ.cost),
-                                    )
+                <div class="flex flex-col gap-6">
+                    <section
+                        class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
+                    >
+                        <h2 class="text-sm font-semibold">
+                            Likely contested champions
+                        </h2>
+                        <p class="mb-3 text-xs text-muted-foreground">
+                            Expected copies the opponents take out of each
+                            champion's pool (1★ = 1, 2★ = 3, 3★ = 9), out of the
+                            pool size. The bar is the share of the pool; the
+                            grey mark is the usual level in this set, red means
+                            more contested than usual.
+                        </p>
+                        <ul class="flex flex-col gap-1.5">
+                            <li
+                                v-for="champ in result.contested.slice(0, 14)"
+                                :key="champ.id"
+                                class="flex items-center gap-2 text-sm"
+                                :title="
+                                    [
+                                        `Usually ${champ.usualCopies} of ${champ.poolSize} copies taken`,
+                                        ...champ.players.map(
+                                            (p) =>
+                                                `${p.name}: ${p.copies} copies`,
+                                        ),
+                                    ].join('\n')
                                 "
-                            />
-                            <span class="w-24 truncate">{{ champ.name }}</span>
-                            <div
-                                class="relative h-2 flex-1 rounded-full bg-muted"
                             >
-                                <div
+                                <img
+                                    v-if="champ.icon"
+                                    :src="champ.icon"
+                                    :alt="champ.name"
+                                    loading="lazy"
                                     :class="
                                         cn(
-                                            'h-full rounded-full',
-                                            champ.expectedCopies >
-                                                champ.usualCopies * 1.15
-                                                ? 'bg-destructive/70'
-                                                : 'bg-muted-foreground/50',
+                                            'size-7 rounded border-2 object-cover',
+                                            costBorderClass(champ.cost),
                                         )
                                     "
-                                    :style="{
-                                        width: poolWidth(
-                                            champ.expectedCopies,
-                                            champ.poolSize,
-                                        ),
-                                    }"
                                 />
+                                <span class="w-24 truncate">{{
+                                    champ.name
+                                }}</span>
                                 <div
-                                    class="absolute -top-0.5 h-3 w-0.5 bg-foreground/60"
-                                    :style="{
-                                        left: poolWidth(
-                                            champ.usualCopies,
-                                            champ.poolSize,
-                                        ),
-                                    }"
-                                />
-                            </div>
-                            <span
-                                class="w-20 text-right text-xs text-muted-foreground tabular-nums"
-                            >
-                                {{ champ.expectedCopies.toFixed(1) }}
-                                <span class="opacity-70"
-                                    >/ {{ champ.poolSize }}</span
+                                    class="relative h-2 flex-1 rounded-full bg-muted"
                                 >
-                            </span>
-                        </li>
-                    </ul>
-                </section>
+                                    <div
+                                        :class="
+                                            cn(
+                                                'h-full rounded-full',
+                                                champ.expectedCopies >
+                                                    champ.usualCopies * 1.15
+                                                    ? 'bg-destructive/70'
+                                                    : 'bg-muted-foreground/50',
+                                            )
+                                        "
+                                        :style="{
+                                            width: poolWidth(
+                                                champ.expectedCopies,
+                                                champ.poolSize,
+                                            ),
+                                        }"
+                                    />
+                                    <div
+                                        class="absolute -top-0.5 h-3 w-0.5 bg-foreground/60"
+                                        :style="{
+                                            left: poolWidth(
+                                                champ.usualCopies,
+                                                champ.poolSize,
+                                            ),
+                                        }"
+                                    />
+                                </div>
+                                <span
+                                    class="w-20 text-right text-xs text-muted-foreground tabular-nums"
+                                >
+                                    {{ champ.expectedCopies.toFixed(1) }}
+                                    <span class="opacity-70"
+                                        >/ {{ champ.poolSize }}</span
+                                    >
+                                </span>
+                            </li>
+                        </ul>
+                    </section>
+                    <FreeChampions :champions="result.free ?? []" />
+                </div>
 
                 <section
                     class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"

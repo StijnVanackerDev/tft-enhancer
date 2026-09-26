@@ -135,6 +135,7 @@ class LobbyAnalysisTest extends TestCase
         $this->assertTrue($result['players'][0]['isSubject']);
         $this->assertSame('DIAMOND', $result['players'][1]['rank']['tier']);
         $this->assertNotEmpty($result['contested']);
+        $this->assertIsArray($result['free']);
         // Leona (1-cost, 30 copies) is on every opponent's board at 2★.
         $leona = collect($result['contested'])->firstWhere('id', 'TFT18_Leona');
         $this->assertSame(30, $leona['poolSize']);

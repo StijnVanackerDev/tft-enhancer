@@ -48,6 +48,9 @@ class LobbyPredictor
 
     private const OPEN_COMP_MIN_GAMES = 5;
 
+    /** "Free" champions must normally lose at least this many copies to the opponents. */
+    private const FREE_MIN_USUAL_COPIES = 1.0;
+
     /** Weight of the set average when estimating a player's copies of a unit. */
     private const COPIES_PRIOR = 2.0;
 
@@ -108,12 +111,16 @@ class LobbyPredictor
             ];
         }
 
+        $usual = $this->usualCopies($baseline, $copies, $opponents);
+        $champions = $this->championRows($expected, $holders, $usual);
+
         return [
             'set' => $set,
             'metaGames' => array_sum(array_column($meta, 'games')),
             'players' => $players,
-            'contested' => $this->contested($expected, $holders, $this->usualCopies($baseline, $copies, $opponents)),
-            'openComps' => $this->openComps($meta, $expected, $this->usualCopies($baseline, $copies, $opponents), array_keys($baseline)),
+            'contested' => $this->contested($champions),
+            'free' => $this->free($champions, $meta),
+            'openComps' => $this->openComps($meta, $expected, $usual, array_keys($baseline)),
         ];
     }
 
@@ -310,12 +317,80 @@ class LobbyPredictor
     /**
      * Champions sorted by the share of their pool the opponents are expected to take.
      *
+     * @param  list<array{id: string, name: string, cost: int, icon: ?string, poolSize: int, expectedCopies: float, usualCopies: float, players: list<array{name: string, copies: float}>}>  $rows
+     * @return list<array{id: string, name: string, cost: int, icon: ?string, poolSize: int, expectedCopies: float, usualCopies: float, players: list<array{name: string, copies: float}>}>
+     */
+    private function contested(array $rows): array
+    {
+        usort($rows, fn (array $a, array $b) => $b['expectedCopies'] / $b['poolSize'] <=> $a['expectedCopies'] / $a['poolSize']);
+
+        return array_slice($rows, 0, 24);
+    }
+
+    /**
+     * Champions that matter (a 3★ target or carry in a real comp, normally
+     * contested) but that the opponents are expected to take less of than
+     * usual. Most "freer than usual" first.
+     *
+     * @param  list<array{id: string, name: string, cost: int, icon: ?string, poolSize: int, expectedCopies: float, usualCopies: float, players: list<array{name: string, copies: float}>}>  $rows
+     * @param  Meta  $meta
+     * @return list<array<string, mixed>>
+     */
+    private function free(array $rows, array $meta): array
+    {
+        // Which proven comps each champion is a key unit of (niche lines don't count).
+        $minGames = $this->minProvenGames($meta);
+        $keyIn = [];
+        foreach ($meta as $comp) {
+            if (! $comp['enterable'] || $comp['games'] < $minGames) {
+                continue;
+            }
+
+            foreach ($comp['units'] as $unit) {
+                if ($unit['role'] !== 'filler') {
+                    $keyIn[$unit['id']][] = $comp['label'];
+                }
+            }
+        }
+
+        $free = [];
+        foreach ($rows as $row) {
+            // Only champions people actually want, and that are normally taken.
+            if (! isset($keyIn[$row['id']]) || $row['usualCopies'] < self::FREE_MIN_USUAL_COPIES) {
+                continue;
+            }
+
+            $ratio = $row['expectedCopies'] / $row['usualCopies'];
+
+            if ($ratio < 1) {
+                $free[] = [...$row, 'ratio' => round($ratio, 2), 'keyIn' => array_slice($keyIn[$row['id']], 0, 3)];
+            }
+        }
+
+        usort($free, fn (array $a, array $b) => $a['ratio'] <=> $b['ratio']);
+
+        return array_slice($free, 0, 12);
+    }
+
+    /**
+     * Games a comp needs before we trust it: 1% of all matched boards, min 5.
+     *
+     * @param  Meta  $meta
+     */
+    private function minProvenGames(array $meta): float
+    {
+        return max(self::OPEN_COMP_MIN_GAMES, array_sum(array_column($meta, 'games')) * self::OPEN_COMP_MIN_SHARE);
+    }
+
+    /**
+     * One row per shop champion with the copies expected and usually taken.
+     *
      * @param  array<string, float>  $expected  Expected copies taken.
      * @param  array<string, array<string, float>>  $holders  Expected copies per opponent.
      * @param  array<string, float>  $usual  Usual copies taken.
      * @return list<array{id: string, name: string, cost: int, icon: ?string, poolSize: int, expectedCopies: float, usualCopies: float, players: list<array{name: string, copies: float}>}>
      */
-    private function contested(array $expected, array $holders, array $usual): array
+    private function championRows(array $expected, array $holders, array $usual): array
     {
         $rows = [];
 
@@ -348,9 +423,7 @@ class LobbyPredictor
             ];
         }
 
-        usort($rows, fn (array $a, array $b) => $b['expectedCopies'] / $b['poolSize'] <=> $a['expectedCopies'] / $a['poolSize']);
-
-        return array_slice($rows, 0, 24);
+        return $rows;
     }
 
     /**
@@ -372,7 +445,7 @@ class LobbyPredictor
     private function openComps(array $meta, array $expected, array $usual, array $setUnits): array
     {
         $rows = [];
-        $minGames = max(self::OPEN_COMP_MIN_GAMES, array_sum(array_column($meta, 'games')) * self::OPEN_COMP_MIN_SHARE);
+        $minGames = $this->minProvenGames($meta);
         $remainingNow = $this->remainingPerCost($setUnits, $expected);
         $remainingUsual = $this->remainingPerCost($setUnits, $usual);
 
