@@ -66,4 +66,42 @@ return [
         'carry_min_items' => 1.5,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Rank brackets
+    |--------------------------------------------------------------------------
+    |
+    | A lobby is compared with games of its own rank bracket (the bracket of
+    | the median player), as long as we have enough boards of that bracket;
+    | otherwise with all games. Matches get their tier from the player we
+    | found them through (tft_matches.sample_tier).
+    |
+    */
+
+    'brackets' => [
+        'master+' => ['CHALLENGER', 'GRANDMASTER', 'MASTER'],
+        'diamond' => ['DIAMOND'],
+        'emerald' => ['EMERALD'],
+        'platinum-' => ['PLATINUM', 'GOLD', 'SILVER', 'BRONZE', 'IRON'],
+    ],
+
+    'bracket_min_boards' => 1000,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Prediction weights
+    |--------------------------------------------------------------------------
+    |
+    | Weight of the meta vs a player's own history: base + per_diversity x
+    | (distinct comps / games). Chosen by backtesting on Set 18 games: high
+    | elo players rarely repeat comps, so the meta gets more weight there;
+    | Diamond and Emerald players are more consistent.
+    |
+    */
+
+    'prediction_alpha' => [
+        'master+' => ['base' => 2.0, 'per_diversity' => 16.0],
+        'default' => ['base' => 1.0, 'per_diversity' => 8.0],
+    ],
+
 ];

@@ -6,8 +6,8 @@ use App\Enums\Platform;
 use App\Models\TftMatch;
 use App\Services\Riot\RiotClient;
 use App\Services\Tft\MatchImporter;
+use App\Services\Tft\MetaComps;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Cache;
 
 /**
  * Fills the database with recent ranked matches, which the comps page and
@@ -52,10 +52,7 @@ class CrawlMeta extends Command
         }
 
         // Comp stats and baselines are cached per set; make them pick up the new games.
-        $set = TftMatch::max('set_number');
-        foreach (['meta-comps', 'unit-baseline', 'unit-copies', 'level-by-stage'] as $cache) {
-            Cache::forget("{$cache}:{$set}");
-        }
+        MetaComps::forgetCache((int) TftMatch::max('set_number'));
 
         $this->info('Done.');
 

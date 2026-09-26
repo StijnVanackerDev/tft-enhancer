@@ -3,9 +3,9 @@
 namespace App\Console\Commands;
 
 use App\Models\CompDefinition;
+use App\Services\Tft\MetaComps;
 use App\Services\Tft\StaticData;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -88,7 +88,7 @@ class ImportComps extends Command
         });
 
         // Comp stats and baselines are cached per set.
-        Cache::forget("meta-comps:{$set}");
+        MetaComps::forgetCache($set);
 
         $this->info(sprintf('Imported %d comps for Set %d.', count($definitions), $set));
 

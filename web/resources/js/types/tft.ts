@@ -146,6 +146,8 @@ export type KeyUnit = {
     needed: number;
     poolSize: number;
     left: number;
+    // Level the unit is searched at (can be above the comp's roll level).
+    level: number;
     rolls: number | null;
     usualRolls: number | null;
 };
@@ -232,8 +234,14 @@ export type LobbyResult = {
     metaGames: number;
     players: LobbyPlayer[];
     contested: ContestedChampion[];
-    // Missing in analyses made before this list existed.
+    // Missing in analyses made before these fields existed.
     free?: FreeChampion[];
+    anyOpen?: boolean;
+    bracket?: {
+        lobby: string | null;
+        comparedWith: string | null;
+        boards: number;
+    };
     openComps: OpenComp[];
 };
 

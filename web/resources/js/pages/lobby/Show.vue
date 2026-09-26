@@ -4,6 +4,7 @@ import { ChevronDown } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import FreeChampions from '@/components/tft/FreeChampions.vue';
 import OpenCompCard from '@/components/tft/OpenCompCard.vue';
+import ShowMoreButton from '@/components/tft/ShowMoreButton.vue';
 import PlaystyleCard from '@/components/tft/PlaystyleCard.vue';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -64,8 +65,17 @@ const etaMinutes = computed(() => {
 
 const result = computed(() => props.analysis.result);
 
-// The best few open comps are shown; the rest behind "Show all".
+// Lists show their first few items; the rest behind "Show all".
 const OPEN_COMPS_SHOWN = 6;
+const CHAMPIONS_SHOWN = 8;
+const showAllContested = ref(false);
+const visibleContested = computed(() => {
+    const champions = result.value?.contested ?? [];
+
+    return showAllContested.value
+        ? champions
+        : champions.slice(0, CHAMPIONS_SHOWN);
+});
 const showAllOpenComps = ref(false);
 const visibleOpenComps = computed(() => {
     const comps = result.value?.openComps ?? [];
@@ -113,6 +123,27 @@ function playerLink(gameName: string | null, tagLine: string | null) {
                 </template>
                 <template v-else>
                     Based on each player's recent games.
+                </template>
+            </p>
+            <p
+                v-if="result?.bracket"
+                class="mt-1 text-xs text-muted-foreground"
+            >
+                <template v-if="result.bracket.comparedWith">
+                    {{ result.bracket.lobby }} lobby, compared with
+                    {{ result.bracket.comparedWith }} games ({{
+                        result.bracket.boards
+                    }}
+                    boards).
+                </template>
+                <template v-else>
+                    Compared with games of all ranks ({{
+                        result.bracket.boards
+                    }}
+                    boards)<template v-if="result.bracket.lobby">
+                        : not enough {{ result.bracket.lobby }} games
+                        yet</template
+                    >.
                 </template>
             </p>
         </header>
@@ -186,7 +217,7 @@ function playerLink(gameName: string | null, tagLine: string | null) {
                         </p>
                         <ul class="flex flex-col gap-1.5">
                             <li
-                                v-for="champ in result.contested.slice(0, 14)"
+                                v-for="champ in visibleContested"
                                 :key="champ.id"
                                 class="flex items-center gap-2 text-sm"
                                 :title="
@@ -254,6 +285,12 @@ function playerLink(gameName: string | null, tagLine: string | null) {
                                 </span>
                             </li>
                         </ul>
+                        <ShowMoreButton
+                            v-if="result.contested.length > CHAMPIONS_SHOWN"
+                            v-model="showAllContested"
+                            :total="result.contested.length"
+                            what="champions"
+                        />
                     </section>
                     <FreeChampions :champions="result.free ?? []" />
                 </div>
@@ -261,7 +298,20 @@ function playerLink(gameName: string | null, tagLine: string | null) {
                 <section
                     class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
                 >
-                    <h2 class="text-sm font-semibold">Likely open comps</h2>
+                    <h2 class="text-sm font-semibold">
+                        {{
+                            result.anyOpen === false
+                                ? 'Comps for this lobby'
+                                : 'Likely open comps'
+                        }}
+                    </h2>
+                    <p
+                        v-if="result.anyOpen === false"
+                        class="mt-1 rounded-md bg-muted/60 px-2 py-1.5 text-xs"
+                    >
+                        No comp is clearly more open than usual in this lobby,
+                        so these are sorted by how well they place.
+                    </p>
                     <p class="mb-3 text-xs text-muted-foreground">
                         Comps that place well and whose key champions are
                         easiest to hit in this lobby. ★ = 3★ target, sword =
@@ -283,27 +333,12 @@ function playerLink(gameName: string | null, tagLine: string | null) {
                             :comp="comp"
                         />
                     </ul>
-                    <Button
+                    <ShowMoreButton
                         v-if="result.openComps.length > OPEN_COMPS_SHOWN"
-                        variant="ghost"
-                        size="sm"
-                        class="mt-3 w-full"
-                        @click="showAllOpenComps = !showAllOpenComps"
-                    >
-                        <ChevronDown
-                            :class="
-                                cn(
-                                    'transition-transform',
-                                    showAllOpenComps && 'rotate-180',
-                                )
-                            "
-                        />
-                        {{
-                            showAllOpenComps
-                                ? 'Show fewer'
-                                : `Show all ${result.openComps.length} comps`
-                        }}
-                    </Button>
+                        v-model="showAllOpenComps"
+                        :total="result.openComps.length"
+                        what="comps"
+                    />
                 </section>
             </div>
 

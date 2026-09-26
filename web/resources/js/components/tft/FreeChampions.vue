@@ -1,11 +1,19 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue';
+import ShowMoreButton from '@/components/tft/ShowMoreButton.vue';
 import { cn } from '@/lib/utils';
 import { costBorderClass } from '@/lib/tft';
 import type { FreeChampion } from '@/types';
 
-defineProps<{
+const props = defineProps<{
     champions: FreeChampion[];
 }>();
+
+const SHOWN = 8;
+const showAll = ref(false);
+const visible = computed(() =>
+    showAll.value ? props.champions : props.champions.slice(0, SHOWN),
+);
 
 // Share of a champion's pool, as a CSS width (capped at 100%).
 function poolWidth(copies: number, poolSize: number): string {
@@ -27,7 +35,7 @@ function poolWidth(copies: number, poolSize: number): string {
         </p>
         <ul class="flex flex-col gap-1.5">
             <li
-                v-for="champ in champions"
+                v-for="champ in visible"
                 :key="champ.id"
                 class="flex items-center gap-2 text-sm"
                 :title="`${champ.expectedCopies} of ${champ.poolSize} copies expected to be taken (usually ${champ.usualCopies}).\nKey unit in: ${champ.keyIn.join(', ')}`"
@@ -74,5 +82,11 @@ function poolWidth(copies: number, poolSize: number): string {
                 </span>
             </li>
         </ul>
+        <ShowMoreButton
+            v-if="champions.length > SHOWN"
+            v-model="showAll"
+            :total="champions.length"
+            what="champions"
+        />
     </section>
 </template>

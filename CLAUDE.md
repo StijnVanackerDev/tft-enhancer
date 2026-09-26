@@ -46,7 +46,8 @@ Tests fake the Riot API (`Http::fake`) and sleeps (`Sleep::fake()`); follow that
 - Shop odds per level in `web/config/tft.php` are from recent sets and not yet verified for Set 18 (ask the user to check the in-game level odds tooltip if they matter).
 - Unit roles per comp (3★ target / carry / filler) are derived from our boards; open comps only use key units (not fillers). Thresholds are in `config('tft.roles')`.
 - Champion pool sizes per cost live in `web/config/tft.php` and `overlay/src/lib/poolSizes.js`; keep both in sync. Contest in the lobby analysis is measured in pool copies.
-- Prediction weights were chosen by backtesting on real Challenger games (see README). Re-run a backtest before changing them.
+- Prediction weights (`config('tft.prediction_alpha')`, per rank bracket) were chosen by backtesting on real games per bracket (see README). Re-run a backtest per bracket before changing them.
+- Lobby analyses compare with the lobby's own rank bracket when that bracket has 1000+ boards (`config('tft.brackets')`); crawling more tiers improves this.
 
 ## Status (keep up to date)
 

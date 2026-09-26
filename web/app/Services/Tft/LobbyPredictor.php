@@ -32,12 +32,6 @@ use Illuminate\Support\Collection;
  */
 class LobbyPredictor
 {
-    /** Meta weight for a player who always plays the same carry... */
-    public const ALPHA_BASE = 2.0;
-
-    /** ...plus this much for a player who never repeats a carry. */
-    public const ALPHA_PER_DIVERSITY = 16.0;
-
     private const MIN_LISTED_PROBABILITY = 0.05;
 
     /** Only comps that place at least this well on average are suggested... */
@@ -67,10 +61,17 @@ class LobbyPredictor
      */
     public function predict(array $lobby, ?int $set, ?string $subjectPuuid): array
     {
+        // Compare with games of the lobby's own rank bracket when we have
+        // enough of them, otherwise with all games of the set.
+        $lobbyBracket = RankBracket::forLobby(array_map(fn (array $m) => MatchImporter::rankedTier($m['league']), $lobby));
+        $dataBracket = $lobbyBracket !== null && $this->meta->boardCount($set, $lobbyBracket) >= (int) config('tft.bracket_min_boards')
+            ? $lobbyBracket
+            : null;
+
         /** @var Meta $meta */
-        $meta = array_column($this->meta->forSet($set), null, 'key');
-        $baseline = $this->meta->unitBaseline($set);
-        $copies = $this->meta->unitCopies($set);
+        $meta = array_column($this->meta->forSet($set, $dataBracket), null, 'key');
+        $baseline = $this->meta->unitBaseline($set, $dataBracket);
+        $copies = $this->meta->unitCopies($set, $dataBracket);
         $levelByStage = $this->playstyle->levelByStage($set);
 
         $players = [];
@@ -81,7 +82,7 @@ class LobbyPredictor
         foreach ($lobby as $member) {
             $games = $member['games']->values();
             $isSubject = $member['puuid'] === $subjectPuuid;
-            $alpha = $this->alpha($games);
+            $alpha = $this->alpha($games, $lobbyBracket);
             $weight = $this->totalWeight($games);
             $name = $member['gameName'] ?? 'Unknown';
 
@@ -106,7 +107,7 @@ class LobbyPredictor
                 'playstyle' => $this->playstyle->profile($games, $levelByStage),
                 // How much of the prediction comes from this player's own games.
                 'historyWeight' => round($weight / ($weight + $alpha), 2),
-                'likelyComps' => $this->likelyComps($this->compDistribution($games, $meta), $games, $meta),
+                'likelyComps' => $this->likelyComps($this->compDistribution($games, $meta, $lobbyBracket), $games, $meta),
                 'actual' => $member['actual'] ? $this->actual($member['actual']) : null,
             ];
         }
@@ -120,7 +121,14 @@ class LobbyPredictor
             'players' => $players,
             'contested' => $this->contested($champions),
             'free' => $this->free($champions, $meta),
-            'openComps' => $this->openComps($meta, $expected, $usual, array_keys($baseline)),
+            'openComps' => $openComps = $this->openComps($meta, $expected, $usual, array_keys($baseline)),
+            // Whether any comp is clearly (5%+) easier than in a usual lobby.
+            'anyOpen' => collect($openComps)->contains(fn (array $c) => $c['difficulty'] !== null && $c['difficulty'] <= 0.95),
+            'bracket' => [
+                'lobby' => $lobbyBracket !== null ? RankBracket::label($lobbyBracket) : null,
+                'comparedWith' => $dataBracket !== null ? RankBracket::label($dataBracket) : null,
+                'boards' => $this->meta->boardCount($set, $dataBracket),
+            ],
         ];
     }
 
@@ -131,9 +139,9 @@ class LobbyPredictor
      * @param  Meta  $meta
      * @return array<string, float>
      */
-    public function compDistribution(Collection $games, array $meta): array
+    public function compDistribution(Collection $games, array $meta, ?string $bracket = null): array
     {
-        $alpha = $this->alpha($games);
+        $alpha = $this->alpha($games, $bracket);
         $distribution = [];
 
         foreach ($meta as $key => $comp) {
@@ -236,13 +244,15 @@ class LobbyPredictor
     /**
      * @param  Collection<int, Participant>  $games
      */
-    public function alpha(Collection $games): float
+    public function alpha(Collection $games, ?string $bracket = null): float
     {
         $diversity = $games->isEmpty()
             ? 1.0
             : $games->map(fn (Participant $g) => $this->keyOf($g))->unique()->count() / $games->count();
 
-        return self::ALPHA_BASE + self::ALPHA_PER_DIVERSITY * $diversity;
+        $weights = config("tft.prediction_alpha.{$bracket}") ?? config('tft.prediction_alpha.default');
+
+        return (float) $weights['base'] + (float) $weights['per_diversity'] * $diversity;
     }
 
     /**
@@ -482,8 +492,12 @@ class LobbyPredictor
                     'needed' => $unit['needed'],
                     'poolSize' => $pool,
                     'left' => round(max(0.0, $pool - $takenNow), 1),
-                    'rolls' => $this->rollsToHit($unit['needed'], $pool - $takenNow, $remainingNow[$unit['cost']] ?? 0.0, $unit['cost'], $level),
-                    'usualRolls' => $this->rollsToHit($unit['needed'], $pool - $takenUsual, $remainingUsual[$unit['cost']] ?? 0.0, $unit['cost'], $level),
+                    // Units that can't show up at the comp's roll level (e.g. a
+                    // 5-cost in a level 5 reroll comp) are found later, at the
+                    // first level where they can.
+                    'level' => $unitLevel = self::firstLevelWithOdds($unit['cost'], $level),
+                    'rolls' => $this->rollsToHit($unit['needed'], $pool - $takenNow, $remainingNow[$unit['cost']] ?? 0.0, $unit['cost'], $unitLevel),
+                    'usualRolls' => $this->rollsToHit($unit['needed'], $pool - $takenUsual, $remainingUsual[$unit['cost']] ?? 0.0, $unit['cost'], $unitLevel),
                 ];
             }
 
@@ -568,6 +582,20 @@ class LobbyPredictor
         }
 
         return $remaining;
+    }
+
+    /**
+     * The first level from $level up where units of this cost can appear in the shop.
+     */
+    public static function firstLevelWithOdds(int $cost, int $level): int
+    {
+        for ($l = $level; $l <= 10; $l++) {
+            if ((float) config("tft.shop_odds.{$l}.{$cost}", 0) > 0) {
+                return $l;
+            }
+        }
+
+        return $level;
     }
 
     /**

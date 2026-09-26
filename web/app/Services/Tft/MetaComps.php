@@ -5,6 +5,7 @@ namespace App\Services\Tft;
 use App\Models\CompDefinition;
 use App\Models\Participant;
 use App\Models\TftMatch;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
@@ -55,16 +56,14 @@ class MetaComps
      *
      * @return list<Comp>
      */
-    public function forSet(?int $set): array
+    public function forSet(?int $set, ?string $bracket = null): array
     {
         if ($set === null) {
             return [];
         }
 
-        return Cache::remember("meta-comps:{$set}", now()->addMinutes(10), function () use ($set) {
-            $boards = Participant::query()
-                ->whereHas('match', fn ($q) => $q->againstPlayers()->where('set_number', $set))
-                ->get(['puuid', 'placement', 'traits', 'units']);
+        return Cache::remember(self::cacheKey('meta-comps', $set, $bracket), now()->addMinutes(10), function () use ($set, $bracket) {
+            $boards = $this->boards($set, $bracket)->get(['puuid', 'placement', 'traits', 'units']);
 
             $groups = $boards
                 ->toBase()
@@ -266,11 +265,42 @@ class MetaComps
     /**
      * All stored boards of a set (games vs bots excluded).
      */
-    public function boardCount(?int $set): int
+    public function boardCount(?int $set, ?string $bracket = null): int
     {
-        return $set === null ? 0 : Participant::query()
-            ->whereHas('match', fn ($q) => $q->againstPlayers()->where('set_number', $set))
-            ->count();
+        return $set === null ? 0 : $this->boards($set, $bracket)->count();
+    }
+
+    /**
+     * Boards of a set (games vs bots excluded), optionally of one rank bracket.
+     *
+     * @return Builder<Participant>
+     */
+    private function boards(int $set, ?string $bracket): Builder
+    {
+        return Participant::query()->whereHas('match', fn ($q) => $q
+            ->againstPlayers()
+            ->where('set_number', $set)
+            ->when($bracket !== null, fn ($q) => $q->whereIn('sample_tier', RankBracket::tiers((string) $bracket))));
+    }
+
+    public static function cacheKey(string $name, int $set, ?string $bracket = null): string
+    {
+        return "{$name}:{$set}".($bracket !== null ? ":{$bracket}" : '');
+    }
+
+    /**
+     * Drop every cached statistic of a set (all brackets), e.g. after new
+     * matches or comp definitions were imported.
+     */
+    public static function forgetCache(int $set): void
+    {
+        $brackets = [null, ...array_keys((array) config('tft.brackets', []))];
+
+        foreach (['meta-comps', 'unit-baseline', 'unit-copies', 'level-by-stage'] as $name) {
+            foreach ($brackets as $bracket) {
+                Cache::forget(self::cacheKey($name, $set, $bracket === null ? null : (string) $bracket));
+            }
+        }
     }
 
     /**
@@ -279,16 +309,14 @@ class MetaComps
      *
      * @return array<string, float>
      */
-    public function unitBaseline(?int $set): array
+    public function unitBaseline(?int $set, ?string $bracket = null): array
     {
         if ($set === null) {
             return [];
         }
 
-        return Cache::remember("unit-baseline:{$set}", now()->addMinutes(10), function () use ($set) {
-            $boards = Participant::query()
-                ->whereHas('match', fn ($q) => $q->againstPlayers()->where('set_number', $set))
-                ->get(['units']);
+        return Cache::remember(self::cacheKey('unit-baseline', $set, $bracket), now()->addMinutes(10), function () use ($set, $bracket) {
+            $boards = $this->boards($set, $bracket)->get(['units']);
 
             $counts = [];
             foreach ($boards as $board) {
@@ -307,16 +335,14 @@ class MetaComps
      *
      * @return array<string, float>
      */
-    public function unitCopies(?int $set): array
+    public function unitCopies(?int $set, ?string $bracket = null): array
     {
         if ($set === null) {
             return [];
         }
 
-        return Cache::remember("unit-copies:{$set}", now()->addMinutes(10), function () use ($set) {
-            $boards = Participant::query()
-                ->whereHas('match', fn ($q) => $q->againstPlayers()->where('set_number', $set))
-                ->get(['units']);
+        return Cache::remember(self::cacheKey('unit-copies', $set, $bracket), now()->addMinutes(10), function () use ($set, $bracket) {
+            $boards = $this->boards($set, $bracket)->get(['units']);
 
             $copies = [];
             $boardsWith = [];

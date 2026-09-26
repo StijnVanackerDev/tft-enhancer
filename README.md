@@ -65,8 +65,18 @@ Without definitions a comp is identified by its carry: the 1-4 cost unit
 holding the most items (5-costs are capstones, not comps). Per
 player, P(champion on board) blends their recent boards (weight 0.85 per
 game back) with how common the champion is overall. The meta weight is
-`2 + 16 x (distinct carries / games)`, so players who force comps are
-predicted from their own history and flexible players mostly from the meta.
+`base + per_diversity x (distinct comps / games)`, so players who force comps
+are predicted from their own history and flexible players mostly from the
+meta. The weights differ per rank bracket (`config/tft.php`): a backtest on
+Set 18 showed Emerald and Diamond players repeat comps more than Master+
+players, so their history counts more (1 + 8 x diversity vs 2 + 16 x).
+
+Each lobby is compared with games of its own rank bracket (the median ranked
+player's), as long as there are at least 1000 boards of that bracket;
+otherwise with all games. Units that can't appear in the shop at a comp's
+roll level (e.g. a 5-cost in a level 5 reroll comp) are searched for at the
+first level where they can. When no comp is clearly (5%+) easier than usual,
+the page says so and sorts by placement.
 
 Contest is counted in pool copies (1★ = 1, 2★ = 3, 3★ = 9): per opponent,
 P(champion on board) x the copies they usually hold of it (their own history

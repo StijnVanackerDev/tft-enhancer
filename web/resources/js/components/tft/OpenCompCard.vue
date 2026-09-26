@@ -56,7 +56,7 @@ const verdict = computed(() => {
                 v-for="unit in comp.keyUnits"
                 :key="unit.id"
                 class="flex items-center gap-1.5 rounded-md bg-muted/50 py-0.5 pr-2 pl-0.5 text-xs"
-                :title="`${unit.name}: needs ${unit.needed} of ${unit.poolSize} copies, ~${unit.left} left after the opponents. About ${unit.rolls ?? '∞'} shops at level ${comp.rollLevel} (usually ${unit.usualRolls ?? '∞'}).`"
+                :title="`${unit.name}: needs ${unit.needed} of ${unit.poolSize} copies, ~${unit.left} left after the opponents. About ${unit.rolls ?? '∞'} shops at level ${unit.level} (usually ${unit.usualRolls ?? '∞'}).`"
             >
                 <img
                     :src="unit.icon ?? undefined"
